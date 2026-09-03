@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<XnaContent xmlns:Graphics="Microsoft.Xna.Framework.Content.Pipeline.Graphics">
+  <Asset Type="Graphics:FontDescription">
+    <FontName>monogram.ttf</FontName>
+    <!-- FontName is a FILENAME, not a family name: the macOS font processor
+         cannot resolve family names.
+         Size is in POINTS, rasterized at 96 DPI (px = pt * 4/3). 12pt -> 16px em,
+         which is monogram's native pixel grid, so glyphs bake with no antialiasing.
+         Draw at INTEGER scales under PointClamp and snap positions to whole
+         pixels or the glyph grid samples unevenly and the text goes mushy. -->
+    <Size>12</Size>
+    <Spacing>0</Spacing>
+    <UseKerning>true</UseKerning>
+    <Style>Regular</Style>
+    <CharacterRegions>
+      <!-- Full printable ASCII. This project renders numbers everywhere
+           (trait values, weights, energy, generation counts), so a
+           letters-only cmap is not survivable here. -->
+      <CharacterRegion>
+        <Start>&#32;</Start>
+        <End>&#126;</End>
+      </CharacterRegion>
+    </CharacterRegions>
+  </Asset>
+</XnaContent>

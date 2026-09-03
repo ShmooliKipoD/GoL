@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- HEADLESS SIMULATION CORE.
+       This project must NEVER reference MonoGame or MonoGame.Extended.
+       That rule is what keeps the sim unit-testable without a window; it is
+       asserted by GoL.Sim.Tests.ArchitectureTests. Use System.Numerics.Vector2
+       for all math here - GoL.Render converts to the XNA type at the boundary. -->
+  <PropertyGroup>
+    <RootNamespace>GoL.Sim</RootNamespace>
+  </PropertyGroup>
+
+</Project>

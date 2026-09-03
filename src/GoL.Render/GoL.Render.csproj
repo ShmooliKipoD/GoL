@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Presentation only: draws GoL.Sim state. Holds no simulation logic and
+       never mutates the world it is handed. -->
+  <PropertyGroup>
+    <RootNamespace>GoL.Render</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.1.303" />
+    <PackageReference Include="MonoGame.Extended" Version="4.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../GoL.Sim/GoL.Sim.csproj" />
+  </ItemGroup>
+
+</Project>

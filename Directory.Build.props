@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- All build output goes to dest/ per the project spec.
+         BaseIntermediateOutputPath ONLY takes effect from Directory.Build.props;
+         it is read before the SDK imports, so setting it in a .csproj is a no-op. -->
+    <BaseOutputPath>$(MSBuildThisFileDirectory)dest/$(MSBuildProjectName)/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)dest/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

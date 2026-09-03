@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Desktop entry point. Note the deliberate omissions vs. the MonoGame
+       template (and vs. QiLight, which inherited them): no <OutputType>WinExe,
+       no app.manifest, no <ApplicationIcon> - all three are Windows-only and
+       inert on macOS. RollForward=Major lets net8.0 run on the installed
+       10.0.x runtime. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>GoL.App</RootNamespace>
+    <RollForward>Major</RollForward>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <TieredCompilation>false</TieredCompilation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.1.303" />
+    <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.1.303" />
+    <PackageReference Include="MonoGame.Extended" Version="4.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../GoL.Sim/GoL.Sim.csproj" />
+    <ProjectReference Include="../GoL.Render/GoL.Render.csproj" />
+  </ItemGroup>
+
+  <!-- MGCB is a dotnet local tool; it must be restored before the content build. -->
+  <Target Name="RestoreDotnetTools" BeforeTargets="Restore">
+    <Message Text="Restoring dotnet tools" Importance="High" />
+    <Exec Command="dotnet tool restore" />
+  </Target>
+
+</Project>

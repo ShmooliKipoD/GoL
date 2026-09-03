@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug GoL",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/dest/GoL.App/Debug/net8.0/GoL.App.dll",
+      "cwd": "${workspaceFolder}/dest/GoL.App/Debug/net8.0",
+      "console": "internalConsole",
+      "stopAtEntry": false,
+      "env": {
+        "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:/usr/local/lib"
+      }
+    }
+  ]
+}

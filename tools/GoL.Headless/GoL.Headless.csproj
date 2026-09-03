@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Soak runner. References GoL.Sim ONLY, so it needs no GL context and no
+       DYLD_FALLBACK_LIBRARY_PATH - it runs anywhere. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>GoL.Headless</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/GoL.Sim/GoL.Sim.csproj" />
+  </ItemGroup>
+
+</Project>
