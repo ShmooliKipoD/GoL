@@ -7,6 +7,13 @@
        for all math here - GoL.Render converts to the XNA type at the boundary. -->
   <PropertyGroup>
     <RootNamespace>GoL.Sim</RootNamespace>
+
+    <!-- Explicit usings ONLY. The solution-wide default would put System.Linq in
+         scope in every file, and LINQ allocates - this assembly runs a tick loop
+         at 60Hz over hundreds of creatures and must not allocate inside it.
+         Turning it off makes `using System.Linq;` a visible, reviewable line
+         rather than an invisible default. -->
+    <ImplicitUsings>disable</ImplicitUsings>
   </PropertyGroup>
 
 </Project>

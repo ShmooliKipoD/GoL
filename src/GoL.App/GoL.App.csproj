@@ -9,8 +9,11 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>GoL.App</RootNamespace>
     <RollForward>Major</RollForward>
-    <PublishReadyToRun>false</PublishReadyToRun>
-    <TieredCompilation>false</TieredCompilation>
+    <!-- Deliberately NOT setting TieredCompilation=false (which QiLight does to
+         avoid early-frame JIT stutter in a twitch arcade game). It also disables
+         TieredPGO, which helps the tight float loops in brain evaluation, and it
+         would make GoL.App run under different codegen than GoL.Headless - so
+         soak-runner perf numbers would not transfer to the real app. -->
   </PropertyGroup>
 
   <ItemGroup>

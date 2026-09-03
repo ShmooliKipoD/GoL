@@ -16,6 +16,7 @@ GoL.Sim  <--  GoL.Render  <--  GoL.App
 | `src/GoL.Render` | Drawing sim state. No simulation logic, never mutates | Sim, MonoGame, Extended |
 | `src/GoL.App` | `Game`, `ScreenManager`, screens, config persistence | Sim, Render, MonoGame, Extended |
 | `tests/GoL.Sim.Tests` | Unit tests over the core | Sim |
+| `tests/GoL.Ui.Tests` | Menu, prompt and input-mapping logic | Sim, Render |
 | `tools/GoL.Headless` | Long soak runs, world-hash checks | Sim |
 
 ### Why the core is headless
@@ -70,6 +71,48 @@ The redirect interacts with the MGCB content pipeline, which writes `.xnb` files
 to `bin/$(Platform)` relative to `Content/` and then copies them into the output
 directory. Verified working: `dest/GoL.App/Debug/net8.0/Content/Fonts/UiFont.xnb`
 exists after a build and loads at runtime.
+
+**`src/GoL.App/Content/bin` and `.../Content/obj` exist and are correct.** MGCB's
+`/outputDir` and `/intermediateDir` are relative to `Content/`, not to the
+project's output path, so they sit under `src/` regardless of the `dest/`
+redirect. They are gitignored. Do not "fix" this — the `.xnb` does reach `dest/`.
+
+`GoL.Sim` additionally sets `<ImplicitUsings>disable</ImplicitUsings>`. The
+solution-wide default would put `System.Linq` in scope in every core file, and
+LINQ allocates; the tick loop must not. Turning it off makes `using System.Linq;`
+a visible line in review rather than an invisible default.
+
+## Screens vs. overlays
+
+`ScreenManager.LoadScreen` **unloads the outgoing screen**. That is fine for
+menu↔config, but it means pause cannot be a screen: loading a pause screen over
+the simulation would dispose the world.
+
+So the split is:
+
+| Kind | Members | Why |
+|---|---|---|
+| **Screens** (`GameScreen`, swapped by `ScreenManager`) | `MainMenuScreen`, `ConfigScreen`, `CreatureLabScreen`, `SimulationScreen` | Each owns state the others do not need |
+| **Overlays** (a `MenuList` drawn by its host screen, gated on a local flag) | exit-confirm, pause | Must not destroy the state underneath them |
+
+## Input
+
+`KeyboardExtended` and `MouseExtended` hold static previous/current state, so
+`WasKeyJustDown` only works if their `Update()` is called **exactly once per
+frame**. Zero calls and edges never fire (the menu looks dead); two calls and
+edges are lost intermittently (the menu looks like it skips keypresses).
+
+Both are called at the top of `GolGame.Update`, **before** `base.Update()` —
+which is what ticks the `ScreenManager` component and therefore the screens, so
+screens see fresh edge state.
+
+`InputMap.ReadMenu` then converts that into a plain `MenuInput` record struct,
+and `MenuList`/`ConfirmPrompt` take *that* rather than a `KeyboardStateExtended`.
+This is not indirection for its own sake: macOS blocks synthetic keystrokes, so
+the running UI cannot be driven from a script, and the plain-data seam is what
+makes navigation, wrapping, adjustment and the confirm flow testable at all
+(`tests/GoL.Ui.Tests`). `InputMap` is also the single place key bindings are
+named — see `docs/CONTROLS.md`.
 
 ## Simulation structure
 

@@ -24,13 +24,13 @@ when the game was written.
 
 ## Status
 
-**Step 0 of 5 complete** — project skeleton building and running on macOS.
+**Step 1 of 5 complete** — main menu, configuration and exit confirm are working.
 
 | Step | What | State |
 |---|---|---|
 | 0 | Project skeleton, build output, content pipeline | ✅ done |
-| 1 | Game infrastructure: main menu, configuration, exit confirm | ⬜ next |
-| 2 | A single creature: genome, brain, senses, energy, overlays | ⬜ |
+| 1 | Game infrastructure: main menu, configuration, exit confirm | ✅ done |
+| 2 | A single creature: genome, brain, senses, energy, overlays | ⬜ next |
 | 3 | The board: camera, plants and their spread, pheromones, spatial index | ⬜ |
 | 4 | Creatures on the board: population, reproduction, evolution, stats | ⬜ |
 
@@ -82,8 +82,10 @@ bit-reproducible from a seed. A unit test enforces it.
 | [`docs/DESIGN.md`](docs/DESIGN.md) | Cumulative build log — one section per step: problem, approach, files |
 | [`CLAUDE.md`](CLAUDE.md) | Conventions, build incantation, content-pipeline and font gotchas |
 
-`docs/GENOME.md` (trait catalog, mutation operators, brain evaluation) and
-`docs/CONTROLS.md` (key bindings and overlay shortcuts) arrive with Steps 1–2.
+| [`docs/CONTROLS.md`](docs/CONTROLS.md) | Every key binding, including overlay shortcuts |
+
+`docs/GENOME.md` — the trait catalog, mutation operators and brain evaluation —
+arrives with Step 2.
 
 ## Built with
 
