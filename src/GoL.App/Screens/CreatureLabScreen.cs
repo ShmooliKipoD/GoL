@@ -1,6 +1,8 @@
 using GoL.Render;
+using GoL.Sim.Components;
 using GoL.Sim.Core;
 using GoL.Sim.Genetics;
+using GoL.Sim.Systems;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -30,12 +32,13 @@ public sealed class CreatureLabScreen : GolScreen
     private const float MinZoom = 0.6f;
     private const float MaxZoom = 8f;
 
-    private readonly LabWorld _world;
+    private readonly LabEnvironment _env;
+    private readonly SimWorld _world;
     private readonly CreatureRenderer _creatures = new();
     private readonly SenseOverlayRenderer _senses = new();
     private readonly InspectorRenderer _inspector = new();
 
-    private Creature _subject = null!;
+    private int _subjectId;
     private OverlayFlags _overlays = OverlayFlags.Vision | OverlayFlags.Attributes;
     private bool _paused;
     private float _accumulator;
@@ -49,7 +52,8 @@ public sealed class CreatureLabScreen : GolScreen
 
     public CreatureLabScreen(GolGame game) : base(game)
     {
-        _world = new LabWorld(Gol.Config);
+        _env = new LabEnvironment(Gol.Config);
+        _world = new SimWorld(Gol.Config, _env);
         Populate();
     }
 
@@ -57,7 +61,7 @@ public sealed class CreatureLabScreen : GolScreen
     {
         var rng = new Pcg32((ulong)(Gol.Config.Seed == 0 ? 20260903 : Gol.Config.Seed));
 
-        _world.SeedPlants(PlantCount);
+        _env.SeedPlants(PlantCount);
 
         var genome = Genome.CreateSeed(ref rng);
 
@@ -69,15 +73,20 @@ public sealed class CreatureLabScreen : GolScreen
             for (int i = 0; i < preset; i++) Mutator.UnlockRandomTrait(genome, ref rng);
         }
 
-        float centre = _world.WorldSize * 0.5f;
-        _subject = _world.Spawn(genome, new SimVector2(centre, centre), rng.NextFloat(0f, MathF.Tau));
+        float centre = _env.WorldSize * 0.5f;
+        _subjectId = _world.Spawn(genome, new SimVector2(centre, centre), rng.NextFloat(0f, MathF.Tau));
     }
 
     /// <summary>Pixels per world unit, chosen so the arena fills the height with a
     /// margin. Without this a creature is roughly ten pixels across and none of its
     /// anatomy is legible.</summary>
+    /// <summary>A live handle to the creature being inspected. Fetched rather than
+    /// cached: the ECS owns the components, and a stale handle after a rebuild would
+    /// draw the previous brain.</summary>
+    private CreatureView Subject => _world.View(_subjectId);
+
     private float ViewScale =>
-        MathF.Max(0.1f, (ViewHeight - ArenaMargin * 2f) / _world.WorldSize) * _zoom;
+        MathF.Max(0.1f, (ViewHeight - ArenaMargin * 2f) / _env.WorldSize) * _zoom;
 
     public override void Update(GameTime gameTime)
     {
@@ -101,19 +110,21 @@ public sealed class CreatureLabScreen : GolScreen
 
         if (_paused)
         {
-            if (step) _world.Step(dt);
+            if (step) _world.Step();
             return;
         }
 
+        // Real time accumulates here; the simulation only ever advances in whole
+        // fixed steps, which is what keeps a seeded run reproducible.
         _accumulator += (float)gameTime.ElapsedGameTime.TotalSeconds;
         int guard = 0;
         while (_accumulator >= dt && guard++ < 8)
         {
-            _world.Step(dt);
+            _world.Step();
             _accumulator -= dt;
         }
 
-        if (!_subject.Alive) Reset();
+        if (!Subject.Alive) Reset();
     }
 
     private void HandleZoom(KeyboardStateExtended kb)
@@ -150,12 +161,13 @@ public sealed class CreatureLabScreen : GolScreen
 
     private void UnlockOne()
     {
-        var rng = _subject.Rng;
-        Mutator.UnlockRandomTrait(_subject.Genome, ref rng);
-        _subject.Rng = rng;
+        var subject = Subject;
+        ref var rng = ref _world.Get<RandomSource>(_subjectId).Rng;
+
+        Mutator.UnlockRandomTrait(subject.Genome, ref rng);
 
         // The brain gained nodes, so the compiled form and the sensor map are stale.
-        _subject.Rebuild();
+        subject.Mind.Rebuild(subject.Genome);
     }
 
     private void Reset() => Gol.ShowScreen(new CreatureLabScreen(Gol));
@@ -175,8 +187,9 @@ public sealed class CreatureLabScreen : GolScreen
         if (_overlays.Has(OverlayFlags.Field)) DrawScentField();
         DrawPlants();
 
-        _senses.Draw(Batch, _subject, _world, _overlays);
-        _creatures.Draw(Batch, _subject);
+        var subject = Subject;
+        _senses.Draw(Batch, subject, _world.Field, _overlays);
+        _creatures.Draw(Batch, subject);
 
         Batch.End();
 
@@ -196,22 +209,22 @@ public sealed class CreatureLabScreen : GolScreen
         if (_follow)
         {
             return new XnaVector2(
-                MathF.Round(ViewCenter.X - _subject.Position.X * scale),
-                MathF.Round(ViewCenter.Y - _subject.Position.Y * scale));
+                MathF.Round(ViewCenter.X - Subject.Position.X * scale),
+                MathF.Round(ViewCenter.Y - Subject.Position.Y * scale));
         }
 
         return new XnaVector2(
-            MathF.Round((ViewWidth - _world.WorldSize * scale) * 0.5f),
-            MathF.Round((ViewHeight - _world.WorldSize * scale) * 0.5f));
+            MathF.Round((ViewWidth - _env.WorldSize * scale) * 0.5f),
+            MathF.Round((ViewHeight - _env.WorldSize * scale) * 0.5f));
     }
 
     private void DrawArena() =>
-        Batch.DrawRectangle(new RectangleF(0f, 0f, _world.WorldSize, _world.WorldSize),
+        Batch.DrawRectangle(new RectangleF(0f, 0f, _env.WorldSize, _env.WorldSize),
             Palette.InkDim * 0.35f, 1f);
 
     private void DrawPlants()
     {
-        foreach (var plant in _world.Plants)
+        foreach (var plant in _env.Plants)
         {
             if (!plant.Alive) continue;
 
@@ -226,13 +239,13 @@ public sealed class CreatureLabScreen : GolScreen
 
     private void DrawScentField()
     {
-        float cell = _world.ScentCellSize;
+        float cell = _env.ScentCellSize;
 
-        for (int y = 0; y < _world.ScentResolution; y++)
+        for (int y = 0; y < _env.ScentResolution; y++)
         {
-            for (int x = 0; x < _world.ScentResolution; x++)
+            for (int x = 0; x < _env.ScentResolution; x++)
             {
-                float strength = _world.ScentAt(0, x, y);
+                float strength = _env.ScentAt(0, x, y);
                 if (strength <= 0.01f) continue;
 
                 Batch.FillRectangle(new RectangleF(x * cell, y * cell, cell, cell),
@@ -244,13 +257,13 @@ public sealed class CreatureLabScreen : GolScreen
     private void DrawPanels()
     {
         if (_overlays.Has(OverlayFlags.Attributes))
-            _inspector.DrawAttributes(Batch, Text, _subject, new XnaVector2(12f, 12f));
+            _inspector.DrawAttributes(Batch, Text, Subject, new XnaVector2(12f, 12f));
 
         if (_overlays.Has(OverlayFlags.Brain))
         {
             float width = 380f;
             float height = 260f;
-            _inspector.DrawBrain(Batch, Text, _subject,
+            _inspector.DrawBrain(Batch, Text, Subject,
                 new RectangleF(ViewWidth - width - 12f, 12f, width, height));
         }
     }

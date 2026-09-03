@@ -21,7 +21,7 @@ public sealed class SenseOverlayRenderer
     private static readonly Color SmellInk = new(196, 150, 220);
     private static readonly Color MouthInk = new(232, 190, 110);
 
-    public void Draw(SpriteBatch batch, Creature creature, ISenseField field, OverlayFlags flags)
+    public void Draw(SpriteBatch batch, CreatureView creature, ISenseField field, OverlayFlags flags)
     {
         if (flags.Has(OverlayFlags.Vision)) DrawVision(batch, creature);
         if (flags.Has(OverlayFlags.Smell)) DrawSmell(batch, creature, field);
@@ -34,7 +34,7 @@ public sealed class SenseOverlayRenderer
     /// the creature <i>could</i> look but what it is seeing right now, and a short
     /// ray means something is close in that direction.
     /// </summary>
-    private static void DrawVision(SpriteBatch batch, Creature creature)
+    private static void DrawVision(SpriteBatch batch, CreatureView creature)
     {
         DrawEye(batch, creature, creature.ForwardEye, 1f);
 
@@ -42,7 +42,7 @@ public sealed class SenseOverlayRenderer
             DrawEye(batch, creature, rear, 0.65f);
     }
 
-    private static void DrawEye(SpriteBatch batch, Creature creature, Eye eye, float alpha)
+    private static void DrawEye(SpriteBatch batch, CreatureView creature, Eye eye, float alpha)
     {
         var centre = CreatureRenderer.ToXna(creature.Position);
         float eyeHeading = creature.Heading + eye.HeadingOffset;
@@ -82,7 +82,7 @@ public sealed class SenseOverlayRenderer
     /// scent strengthens. The arrow is the difference between smelling something and
     /// knowing where it is.
     /// </summary>
-    private static void DrawSmell(SpriteBatch batch, Creature creature, ISenseField field)
+    private static void DrawSmell(SpriteBatch batch, CreatureView creature, ISenseField field)
     {
         float radius = creature.Genome.Trait(TraitAxis.NoseRadius);
         if (radius < 1f) return;
@@ -116,7 +116,7 @@ public sealed class SenseOverlayRenderer
     /// right now. A plain circle would be actively misleading - it would imply the
     /// creature can eat in any direction, when in fact it must face its food.
     /// </summary>
-    private static void DrawMouth(SpriteBatch batch, Creature creature, ISenseField field)
+    private static void DrawMouth(SpriteBatch batch, CreatureView creature, ISenseField field)
     {
         var centre = CreatureRenderer.ToXna(creature.Position);
         float reach = creature.MouthRange;
@@ -133,7 +133,7 @@ public sealed class SenseOverlayRenderer
     }
 
     private static void DrawBiteTarget(
-        SpriteBatch batch, Creature creature, ISenseField field,
+        SpriteBatch batch, CreatureView creature, ISenseField field,
         float reach, float arc, Vector2 centre)
     {
         Span<Percept> found = stackalloc Percept[64];

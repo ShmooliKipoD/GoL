@@ -31,7 +31,7 @@ public sealed class CreatureRenderer
     /// dark-hued lineages unreadable when hungry.</summary>
     private const float MinBrightness = 0.55f;
 
-    public void Draw(SpriteBatch batch, Creature creature)
+    public void Draw(SpriteBatch batch, CreatureView creature)
     {
         var centre = ToXna(creature.Position);
         float radius = creature.Radius;
@@ -69,7 +69,7 @@ public sealed class CreatureRenderer
     /// wide-FOV creature visibly has wide-set eyes and a narrow-FOV one stares
     /// forward. The eyes are also the heading cue; nothing else marks facing.
     /// </summary>
-    private static void DrawEyes(SpriteBatch batch, Creature creature, Vector2 centre, float radius)
+    private static void DrawEyes(SpriteBatch batch, CreatureView creature, Vector2 centre, float radius)
     {
         float halfFov = creature.Genome.Trait(TraitAxis.EyeHalfFov);
         float eyeRadius = MathF.Max(0.9f, radius * 0.20f);
@@ -114,7 +114,7 @@ public sealed class CreatureRenderer
     /// inferring it from an energy number.
     /// </summary>
     private static void DrawMouth(
-        SpriteBatch batch, Creature creature, Vector2 centre, float radius, Color body)
+        SpriteBatch batch, CreatureView creature, Vector2 centre, float radius, Color body)
     {
         float arc = creature.Genome.Trait(TraitAxis.MouthArc);
         bool biting = creature.LastIntent.Bite;

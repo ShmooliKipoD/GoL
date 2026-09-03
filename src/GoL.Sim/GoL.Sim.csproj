@@ -1,10 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- HEADLESS SIMULATION CORE.
-       This project must NEVER reference MonoGame or MonoGame.Extended.
-       That rule is what keeps the sim unit-testable without a window; it is
-       asserted by GoL.Sim.Tests.ArchitectureTests. Use System.Numerics.Vector2
-       for all math here - GoL.Render converts to the XNA type at the boundary. -->
+       The rule is "never NEEDS graphics to run", not "never references MonoGame":
+       this project uses MonoGame.Extended's ECS, which was verified to build and
+       run with no GraphicsDevice, no window and no DYLD_FALLBACK_LIBRARY_PATH.
+       tools/GoL.Headless is the standing proof - it references only this project
+       and is run without that variable.
+       Use System.Numerics.Vector2 here; GoL.Render converts at the boundary. -->
   <PropertyGroup>
     <RootNamespace>GoL.Sim</RootNamespace>
 
@@ -15,5 +17,11 @@
          rather than an invisible default. -->
     <ImplicitUsings>disable</ImplicitUsings>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ECS only. Nothing here may touch GraphicsDevice, SpriteBatch or Game. -->
+    <PackageReference Include="MonoGame.Extended" Version="4.0.0" />
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.1.303" />
+  </ItemGroup>
 
 </Project>

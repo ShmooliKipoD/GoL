@@ -2,6 +2,7 @@ using System.Numerics;
 using GoL.Sim;
 using GoL.Sim.Core;
 using GoL.Sim.Genetics;
+using GoL.Sim.Systems;
 
 namespace GoL.Sim.Tests;
 
@@ -15,11 +16,12 @@ public class SensingTests
     private const float Arena = 340f;
 
     /// <summary>A creature at the arena centre facing +X, with known eye geometry.</summary>
-    private static (LabWorld World, Creature Subject) Lab(
+    private static (SimWorld World, LabEnvironment Env, CreatureView Subject) Lab(
         float eyeRange = 100f, float halfFov = 0.5f, float heading = 0f)
     {
         var config = new SimConfig { Seed = 1, WorldSize = Arena, Toroidal = true };
-        var world = new LabWorld(config);
+        var env = new LabEnvironment(config);
+        var world = new SimWorld(config, env);
 
         var rng = new Pcg32(42);
         var genome = Genome.CreateSeed(ref rng);
@@ -27,9 +29,9 @@ public class SensingTests
         SetTrait(genome, TraitAxis.EyeRange, eyeRange);
         SetTrait(genome, TraitAxis.EyeHalfFov, halfFov);
 
-        float centre = world.WorldSize * 0.5f;
-        var subject = world.Spawn(genome, new Vector2(centre, centre), heading);
-        return (world, subject);
+        float centre = env.WorldSize * 0.5f;
+        int id = world.Spawn(genome, new Vector2(centre, centre), heading);
+        return (world, env, world.View(id));
     }
 
     /// <summary>Sets a trait to a real value by inverting its normalized range.</summary>
@@ -39,11 +41,17 @@ public class SensingTests
         genome.TraitValues[(int)axis] = Math.Clamp((value - range.Min) / (range.Max - range.Min), 0f, 1f);
     }
 
-    private static void Look(LabWorld world, Creature subject)
+    /// <summary>Runs one sensing pass, exactly as SenseSystem would.</summary>
+    private static void Look(SimWorld world, CreatureView subject)
     {
         var senses = new Senses();
-        var buffer = new float[subject.Brain.SensorCount];
-        senses.Sample(subject, world, subject.Layout, 0f, buffer);
+        var mind = subject.Mind;
+        var buffer = new float[mind.Brain.SensorCount];
+
+        senses.Sample(
+            new SenseSubject(subject.Id, subject.Body, subject.Energy, subject.Vitals,
+                subject.Genes, mind, subject.Sight),
+            world.Field, 0f, buffer);
     }
 
     private static bool SeesAnything(Eye eye)
@@ -55,8 +63,8 @@ public class SensingTests
     [Fact]
     public void SeesAPlantDirectlyAhead()
     {
-        var (world, subject) = Lab();
-        world.AddPlant(subject.Position + new Vector2(50f, 0f));
+        var (world, env, subject) = Lab();
+        env.AddPlant(subject.Position + new Vector2(50f, 0f));
 
         Look(world, subject);
 
@@ -70,8 +78,8 @@ public class SensingTests
     [Fact]
     public void DoesNotSeeAPlantDirectlyBehind()
     {
-        var (world, subject) = Lab();
-        world.AddPlant(subject.Position + new Vector2(-50f, 0f));
+        var (world, env, subject) = Lab();
+        env.AddPlant(subject.Position + new Vector2(-50f, 0f));
 
         Look(world, subject);
 
@@ -84,8 +92,8 @@ public class SensingTests
     public void RangeIsRespected(float distanceFactor, bool expected)
     {
         const float Range = 100f;
-        var (world, subject) = Lab(eyeRange: Range);
-        world.AddPlant(subject.Position + new Vector2(Range * distanceFactor, 0f));
+        var (world, env, subject) = Lab(eyeRange: Range);
+        env.AddPlant(subject.Position + new Vector2(Range * distanceFactor, 0f));
 
         Look(world, subject);
 
@@ -98,9 +106,9 @@ public class SensingTests
     public void FieldOfViewIsRespected(float angle, bool expected)
     {
         const float HalfFov = 0.5f;
-        var (world, subject) = Lab(halfFov: HalfFov);
+        var (world, env, subject) = Lab(halfFov: HalfFov);
 
-        world.AddPlant(subject.Position + new Vector2(
+        env.AddPlant(subject.Position + new Vector2(
             MathF.Cos(angle) * 50f, MathF.Sin(angle) * 50f));
 
         Look(world, subject);
@@ -115,9 +123,9 @@ public class SensingTests
     [Fact]
     public void NearerObjectOccludesFartherOneInTheSameBin()
     {
-        var (world, subject) = Lab();
-        world.AddPlant(subject.Position + new Vector2(80f, 0f));
-        world.AddPlant(subject.Position + new Vector2(20f, 0f));
+        var (world, env, subject) = Lab();
+        env.AddPlant(subject.Position + new Vector2(80f, 0f));
+        env.AddPlant(subject.Position + new Vector2(20f, 0f));
 
         Look(world, subject);
 
@@ -131,7 +139,8 @@ public class SensingTests
     public void SeesAcrossTheWorldSeam_WhenToroidal()
     {
         var config = new SimConfig { Seed = 1, WorldSize = Arena, Toroidal = true };
-        var world = new LabWorld(config);
+        var env = new LabEnvironment(config);
+        var world = new SimWorld(config, env);
 
         var rng = new Pcg32(7);
         var genome = Genome.CreateSeed(ref rng);
@@ -140,8 +149,9 @@ public class SensingTests
 
         // Just inside the right edge, facing +X - so the plant just inside the LEFT
         // edge is a short hop away round the seam, not a world away.
-        var subject = world.Spawn(genome, new Vector2(world.WorldSize - 10f, 50f), 0f);
-        world.AddPlant(new Vector2(10f, 50f));
+        int id = world.Spawn(genome, new Vector2(env.WorldSize - 10f, 50f), 0f);
+        var subject = world.View(id);
+        env.AddPlant(new Vector2(10f, 50f));
 
         Look(world, subject);
 
@@ -152,15 +162,15 @@ public class SensingTests
     [Fact]
     public void RearEye_ExistsOnlyOnceTheTraitIsUnlocked()
     {
-        var (world, subject) = Lab();
-        world.AddPlant(subject.Position + new Vector2(-50f, 0f));
+        var (world, env, subject) = Lab();
+        env.AddPlant(subject.Position + new Vector2(-50f, 0f));
 
         Look(world, subject);
         Assert.Null(subject.RearEye);
 
         var rng = new Pcg32(3);
         Mutator.Unlock(subject.Genome, LatentTraitId.RearEye, ref rng);
-        subject.Rebuild();
+        subject.Mind.Rebuild(subject.Genome);
 
         Look(world, subject);
 
@@ -172,20 +182,23 @@ public class SensingTests
     [Fact]
     public void MouthArcIsRespected_ANearbyPlantBehindIsNotInReach()
     {
-        var (world, subject) = Lab();
+        var (world, env, subject) = Lab();
         SetTrait(subject.Genome, TraitAxis.MouthReach, 5f);
         SetTrait(subject.Genome, TraitAxis.MouthArc, 0.4f);
 
         // Touching the body, but behind it.
-        world.AddPlant(subject.Position + new Vector2(-(subject.Radius + 1f), 0f));
+        env.AddPlant(subject.Position + new Vector2(-(subject.Radius + 1f), 0f));
 
         Look(world, subject);
 
-        int contact = subject.Layout.IndexOf(
+        int contact = subject.Mind.Layout.IndexOf(
             NodeIds.Sensor(NodeIds.InnateSlot, (int)InnateSense.MouthContact));
 
-        var buffer = new float[subject.Brain.SensorCount];
-        new Senses().Sample(subject, world, subject.Layout, 0f, buffer);
+        var buffer = new float[subject.Mind.Brain.SensorCount];
+        new Senses().Sample(
+            new SenseSubject(subject.Id, subject.Body, subject.Energy, subject.Vitals,
+                subject.Genes, subject.Mind, subject.Sight),
+            world.Field, 0f, buffer);
 
         Assert.Equal(0f, buffer[contact]);
     }

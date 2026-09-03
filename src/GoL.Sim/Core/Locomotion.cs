@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using GoL.Sim.Components;
 using GoL.Sim.Genetics;
 
 namespace GoL.Sim.Core;
@@ -28,11 +29,9 @@ public struct Intent
 public static class Locomotion
 {
     /// <summary>Reads the brain's effector outputs into an <see cref="Intent"/>.</summary>
-    public static Intent ReadIntent(Creature creature, ReadOnlySpan<float> effectors)
+    public static Intent ReadIntent(
+        Genome genome, SensorLayout layout, ReadOnlySpan<float> effectors)
     {
-        var layout = creature.Layout;
-        var genome = creature.Genome;
-
         var intent = new Intent
         {
             Thrust = Read(effectors, layout.Action(InnateAction.Thrust)),
@@ -63,11 +62,10 @@ public static class Locomotion
     }
 
     /// <summary>Integrates one step of movement and applies its energy cost.</summary>
-    public static void Apply(Creature creature, in Intent intent, ISenseField field, float dt)
+    public static void Apply(
+        Body body, Energy energy, Genome genome, in Intent intent, ISenseField field, float dt)
     {
-        var genome = creature.Genome;
-
-        float maxSpeed = Metabolism.EffectiveMaxSpeed(creature, intent.Sprint);
+        float maxSpeed = Metabolism.EffectiveMaxSpeed(genome, intent.Sprint);
         float thrust = Math.Clamp(intent.Thrust, -1f, 1f);
 
         // Reverse is slower than forward - a creature that backs away as fast as it
@@ -79,47 +77,48 @@ public static class Locomotion
         // Ease toward the target rather than snapping: instant velocity changes make
         // every creature twitch, and mass should mean something.
         const float responsiveness = 6f;
-        creature.Speed += (target - creature.Speed) * MathF.Min(1f, responsiveness * dt);
+        body.Speed += (target - body.Speed) * MathF.Min(1f, responsiveness * dt);
 
         float turnRate = genome.Trait(TraitAxis.TurnRate);
-        creature.AngularVelocity = Math.Clamp(intent.Turn, -1f, 1f) * turnRate;
-        creature.Heading = Senses.WrapAngle(creature.Heading + creature.AngularVelocity * dt);
+        body.AngularVelocity = Math.Clamp(intent.Turn, -1f, 1f) * turnRate;
+        body.Heading = Senses.WrapAngle(body.Heading + body.AngularVelocity * dt);
 
-        var forward = new Vector2(MathF.Cos(creature.Heading), MathF.Sin(creature.Heading));
-        creature.Position = field.Wrap(creature.Position + forward * (creature.Speed * dt));
+        body.Position = field.Wrap(body.Position + body.Forward * (body.Speed * dt));
 
-        creature.Energy -= Metabolism.MovementCost(creature, intent.Sprint) * dt;
+        energy.Current -= Metabolism.MovementCost(body, genome, intent.Sprint) * dt;
     }
 
     /// <summary>Charges upkeep, ages the creature, and drains any toxin load.</summary>
-    public static void Tick(Creature creature, float baseRate, float dt)
+    public static void Tick(
+        Body body, Energy energy, Vitals vitals, Genome genome, Brains.Brain brain,
+        float baseRate, float dt)
     {
-        creature.Age += dt;
-        creature.Energy -= Metabolism.BaseCost(creature, baseRate) * dt;
+        vitals.Age += dt;
+        energy.Current -= Metabolism.BaseCost(body, genome, brain, vitals, baseRate) * dt;
 
-        if (creature.ToxinLoad > 0f)
+        if (vitals.ToxinLoad > 0f)
         {
-            creature.Energy -= Metabolism.ToxinDrain * creature.ToxinLoad * dt;
-            creature.ToxinLoad *= MathF.Max(0f, 1f - Metabolism.ToxinDecay * dt);
-            if (creature.ToxinLoad < 0.01f) creature.ToxinLoad = 0f;
+            energy.Current -= Metabolism.ToxinDrain * vitals.ToxinLoad * dt;
+            vitals.ToxinLoad *= MathF.Max(0f, 1f - Metabolism.ToxinDecay * dt);
+            if (vitals.ToxinLoad < 0.01f) vitals.ToxinLoad = 0f;
         }
 
-        if (creature.Energy <= 0f || creature.Age > Metabolism.MaxAge)
+        if (energy.Current <= 0f || vitals.Age > Metabolism.MaxAge)
         {
-            creature.Energy = MathF.Max(0f, creature.Energy);
-            creature.Alive = false;
+            energy.Current = MathF.Max(0f, energy.Current);
+            vitals.Alive = false;
         }
     }
 
     /// <summary>All four gates a birth must pass.</summary>
-    public static bool CanReproduce(Creature creature, in Intent intent, float simTime)
+    public static bool CanReproduce(
+        Energy energy, Vitals vitals, Genome genome, in Intent intent, float simTime)
     {
         if (!intent.Reproduce) return false;
-        if (creature.Age < creature.Genome.Trait(TraitAxis.MatureAge)) return false;
-        if (simTime - creature.LastBirthTime < Metabolism.BirthCooldown) return false;
+        if (vitals.Age < genome.Trait(TraitAxis.MatureAge)) return false;
+        if (simTime - vitals.LastBirthTime < Metabolism.BirthCooldown) return false;
 
-        float threshold = creature.Genome.Trait(TraitAxis.ReproduceThreshold);
-        return creature.EnergyFraction >= threshold;
+        return energy.Fraction >= genome.Trait(TraitAxis.ReproduceThreshold);
     }
 
     private static float Read(ReadOnlySpan<float> effectors, int index) =>

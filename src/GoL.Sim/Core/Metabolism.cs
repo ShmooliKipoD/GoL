@@ -1,4 +1,6 @@
 using System;
+using GoL.Sim.Brains;
+using GoL.Sim.Components;
 using GoL.Sim.Genetics;
 
 namespace GoL.Sim.Core;
@@ -69,17 +71,16 @@ public static class Metabolism
     /// body size, plus brain complexity, plus the upkeep of every unlocked trait -
     /// all scaled by the genome's metabolism and by age.
     /// </summary>
-    public static float BaseCost(Creature creature, float baseRate)
+    public static float BaseCost(
+        Body body, Genome genome, Brain brain, Vitals vitals, float baseRate)
     {
-        var genome = creature.Genome;
-
         float structural =
             baseRate
-            + SizeCost * creature.Mass
-            + BrainCost * (creature.Brain.NodeCount + creature.Brain.ConnCount)
+            + SizeCost * body.Mass
+            + BrainCost * (brain.NodeCount + brain.ConnCount)
             + genome.LatentUpkeep();
 
-        return structural * genome.Trait(TraitAxis.Metabolism) * AgeFactor(creature);
+        return structural * genome.Trait(TraitAxis.Metabolism) * AgeFactor(vitals, genome);
     }
 
     /// <summary>
@@ -87,13 +88,13 @@ public static class Metabolism
     /// so old creatures die of being unable to pay for themselves rather than of
     /// hitting an arbitrary limit.
     /// </summary>
-    public static float AgeFactor(Creature creature)
+    public static float AgeFactor(Vitals vitals, Genome genome)
     {
-        float mature = creature.Genome.Trait(TraitAxis.MatureAge);
-        if (creature.Age <= mature) return 1f;
+        float mature = genome.Trait(TraitAxis.MatureAge);
+        if (vitals.Age <= mature) return 1f;
 
         float span = MathF.Max(MaxAge - mature, 1f);
-        float t = (creature.Age - mature) / span;
+        float t = (vitals.Age - mature) / span;
         return 1f + SenescenceRate * t * t;
     }
 
@@ -102,27 +103,25 @@ public static class Metabolism
     /// flat-out is expensive - which is what gives speed a genuine trade-off rather
     /// than making "always maximum" the obvious strategy.
     /// </summary>
-    public static float MovementCost(Creature creature, bool sprinting)
+    public static float MovementCost(Body body, Genome genome, bool sprinting)
     {
-        var genome = creature.Genome;
-
         float maxSpeed = MathF.Max(genome.Trait(TraitAxis.MaxSpeed), 1e-3f);
-        float speedNorm = MathF.Abs(creature.Speed) / maxSpeed;
+        float speedNorm = MathF.Abs(body.Speed) / maxSpeed;
 
         float turnRate = MathF.Max(genome.Trait(TraitAxis.TurnRate), 1e-3f);
-        float turnNorm = MathF.Abs(creature.AngularVelocity) / turnRate;
+        float turnNorm = MathF.Abs(body.AngularVelocity) / turnRate;
 
         float sprintMultiplier = sprinting ? SprintCostFactor : 1f;
 
-        return MoveCost * creature.Mass * speedNorm * speedNorm * sprintMultiplier
-             + TurnCost * creature.Mass * turnNorm;
+        return MoveCost * body.Mass * speedNorm * speedNorm * sprintMultiplier
+             + TurnCost * body.Mass * turnNorm;
     }
 
     /// <summary>Top speed after armour and sprint modifiers.</summary>
-    public static float EffectiveMaxSpeed(Creature creature, bool sprinting)
+    public static float EffectiveMaxSpeed(Genome genome, bool sprinting)
     {
-        float speed = creature.Genome.Trait(TraitAxis.MaxSpeed);
-        if (creature.Genome.Has(LatentTraitId.ArmorPlating)) speed *= ArmorSpeedFactor;
+        float speed = genome.Trait(TraitAxis.MaxSpeed);
+        if (genome.Has(LatentTraitId.ArmorPlating)) speed *= ArmorSpeedFactor;
         if (sprinting) speed *= SprintSpeedFactor;
         return speed;
     }

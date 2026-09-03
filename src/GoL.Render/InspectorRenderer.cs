@@ -28,7 +28,7 @@ public sealed class InspectorRenderer
 
     /// <summary>Lists every trait this creature has - continuous axes with a bar,
     /// then the latent attributes it has acquired.</summary>
-    public void DrawAttributes(SpriteBatch batch, TextRenderer text, Creature creature, Vector2 topLeft)
+    public void DrawAttributes(SpriteBatch batch, TextRenderer text, CreatureView creature, Vector2 topLeft)
     {
         var genome = creature.Genome;
         float lineHeight = text.LineHeight(Scale);
@@ -50,11 +50,11 @@ public sealed class InspectorRenderer
             new Vector2(x, y), Palette.InkDim, Scale);
         y += lineHeight;
 
-        text.Draw($"energy {creature.Energy:0}/{creature.MaxEnergy:0}",
+        text.Draw($"energy {creature.Energy.Current:0}/{creature.Energy.Maximum:0}",
             new Vector2(x, y), Palette.Ink, Scale);
         y += lineHeight;
 
-        text.Draw($"brain {creature.Brain.NodeCount}n {creature.Brain.ConnCount}c",
+        text.Draw($"brain {creature.Mind.Brain.NodeCount}n {creature.Mind.Brain.ConnCount}c",
             new Vector2(x, y), Palette.InkDim, Scale);
         y += lineHeight * 1.5f;
 
@@ -115,10 +115,10 @@ public sealed class InspectorRenderer
     /// and readable at a glance.
     /// </para>
     /// </summary>
-    public void DrawBrain(SpriteBatch batch, TextRenderer text, Creature creature, RectangleF bounds)
+    public void DrawBrain(SpriteBatch batch, TextRenderer text, CreatureView creature, RectangleF bounds)
     {
         var genome = creature.Genome;
-        var brain = creature.Brain;
+        var brain = creature.Mind.Brain;
 
         batch.FillRectangle(bounds, Palette.Panel * 0.92f);
         batch.DrawRectangle(bounds, Palette.InkDim * 0.5f, 1f);

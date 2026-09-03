@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using GoL.Sim.Components;
 using GoL.Sim.Genetics;
 
 namespace GoL.Sim.Core;
@@ -20,32 +21,32 @@ public sealed class Senses
     /// <paramref name="destination"/>, indexed by the brain's dense sensor order.
     /// </summary>
     public void Sample(
-        Creature creature,
+        in SenseSubject creature,
         ISenseField field,
-        SensorLayout layout,
         float simTime,
         Span<float> destination)
     {
         destination.Clear();
 
         var genome = creature.Genome;
+        var layout = creature.Mind.Layout;
 
         UpdateEyes(creature, field);
 
         // --- Innate senses ---
         Write(destination, layout, NodeIds.InnateSlot, (int)InnateSense.Energy,
-            creature.EnergyFraction);
+            creature.Energy.Fraction);
 
         Write(destination, layout, NodeIds.InnateSlot, (int)InnateSense.Age,
-            Math.Clamp(creature.Age / Metabolism.MaxAge, 0f, 1f));
+            Math.Clamp(creature.Vitals.Age / Metabolism.MaxAge, 0f, 1f));
 
         float maxSpeed = genome.Trait(TraitAxis.MaxSpeed);
         Write(destination, layout, NodeIds.InnateSlot, (int)InnateSense.Speed,
-            maxSpeed > 0f ? Math.Clamp(creature.Speed / maxSpeed, -1f, 1f) : 0f);
+            maxSpeed > 0f ? Math.Clamp(creature.Body.Speed / maxSpeed, -1f, 1f) : 0f);
 
         float turnRate = genome.Trait(TraitAxis.TurnRate);
         Write(destination, layout, NodeIds.InnateSlot, (int)InnateSense.Turn,
-            turnRate > 0f ? Math.Clamp(creature.AngularVelocity / turnRate, -1f, 1f) : 0f);
+            turnRate > 0f ? Math.Clamp(creature.Body.AngularVelocity / turnRate, -1f, 1f) : 0f);
 
         Write(destination, layout, NodeIds.InnateSlot, (int)InnateSense.Fertility,
             field.SampleFertility(creature.Position));
@@ -62,19 +63,19 @@ public sealed class Senses
         SampleMouth(creature, field, layout, destination);
 
         // --- Vision, forward eye ---
-        WriteEye(destination, layout, NodeIds.VisionSlot, creature.ForwardEye, genome);
+        WriteEye(destination, layout, NodeIds.VisionSlot, creature.Sight.Forward, genome);
 
         // --- Latent senses ---
         if (genome.Has(LatentTraitId.RearEye))
         {
             WriteEye(destination, layout,
-                LatentTraitCatalog.Get(LatentTraitId.RearEye).Slot, creature.RearEye!, genome);
+                LatentTraitCatalog.Get(LatentTraitId.RearEye).Slot, creature.Sight.Rear!, genome);
         }
 
         if (genome.Has(LatentTraitId.ColorVision))
         {
             int slot = LatentTraitCatalog.Get(LatentTraitId.ColorVision).Slot;
-            var eye = creature.ForwardEye;
+            var eye = creature.Sight.Forward;
             for (int bin = 0; bin < eye.BinCount; bin++)
                 Write(destination, layout, slot, bin, eye.Hue[bin]);
         }
@@ -93,16 +94,16 @@ public sealed class Senses
         {
             Write(destination, layout,
                 LatentTraitCatalog.Get(LatentTraitId.ToxinResistance).Slot, 0,
-                Math.Clamp(creature.ToxinLoad / 50f, 0f, 1f));
+                Math.Clamp(creature.Vitals.ToxinLoad / 50f, 0f, 1f));
         }
     }
 
     /// <summary>Recomputes what each eye can see. Also what the V overlay draws.</summary>
-    private void UpdateEyes(Creature creature, ISenseField field)
+    private void UpdateEyes(in SenseSubject creature, ISenseField field)
     {
         var genome = creature.Genome;
 
-        var forward = creature.ForwardEye;
+        var forward = creature.Sight.Forward;
         forward.HeadingOffset = 0f;
         forward.Range = genome.Trait(TraitAxis.EyeRange);
         forward.HalfFov = genome.Trait(TraitAxis.EyeHalfFov);
@@ -111,7 +112,7 @@ public sealed class Senses
         Eye? rear = null;
         if (genome.Has(LatentTraitId.RearEye))
         {
-            rear = creature.EnsureRearEye();
+            rear = creature.Sight.EnsureRear();
             rear.HeadingOffset = MathF.PI;
             rear.Range = forward.Range * Vision.RearRangeFactor;
             rear.HalfFov = forward.HalfFov;
@@ -128,8 +129,8 @@ public sealed class Senses
             float distance = offset.Length();
             if (distance <= 1e-4f) continue;
 
-            CastInto(forward, creature.Heading, offset, distance, p);
-            if (rear is not null) CastInto(rear, creature.Heading, offset, distance, p);
+            CastInto(forward, creature.Body.Heading, offset, distance, p);
+            if (rear is not null) CastInto(rear, creature.Body.Heading, offset, distance, p);
         }
     }
 
@@ -192,7 +193,7 @@ public sealed class Senses
     }
 
     private void SampleMouth(
-        Creature creature, ISenseField field, SensorLayout layout, Span<float> destination)
+        in SenseSubject creature, ISenseField field, SensorLayout layout, Span<float> destination)
     {
         float reach = creature.MouthRange;
         int count = QueryAll(field, creature.Position, reach, creature.Id);
@@ -210,7 +211,7 @@ public sealed class Senses
             if (distance < 0f) distance = 0f;
 
             // The mouth is an arc, not a ring: a creature must face food to eat it.
-            float relative = WrapAngle(MathF.Atan2(offset.Y, offset.X) - creature.Heading);
+            float relative = WrapAngle(MathF.Atan2(offset.Y, offset.X) - creature.Body.Heading);
             if (MathF.Abs(relative) > mouthArc) continue;
 
             float closeness = 1f - Math.Clamp(distance / MathF.Max(reach, 1e-3f), 0f, 1f);
@@ -234,13 +235,13 @@ public sealed class Senses
     /// <summary>Four taps around the nose give the direction a scent strengthens in -
     /// the difference between smelling something and knowing where it is.</summary>
     private static void SampleScentGradient(
-        Creature creature, ISenseField field, SensorLayout layout, Span<float> destination)
+        in SenseSubject creature, ISenseField field, SensorLayout layout, Span<float> destination)
     {
         int slot = LatentTraitCatalog.Get(LatentTraitId.ScentGradient).Slot;
         float reach = MathF.Max(creature.Genome.Trait(TraitAxis.NoseRadius), 1f);
 
         var nose = creature.NosePosition;
-        var forward = creature.Forward;
+        var forward = creature.Body.Forward;
         var left = new Vector2(-forward.Y, forward.X);
 
         for (int channel = 0; channel < 2; channel++)
