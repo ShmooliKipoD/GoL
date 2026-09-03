@@ -151,3 +151,109 @@ clicking through to one cannot be scripted.
 - `GoL.Sim` sets `<ImplicitUsings>disable</ImplicitUsings>`. The solution-wide
   default puts `System.Linq` in scope in every core file, and the tick loop must
   not allocate; turning it off makes `using System.Linq;` a visible line in review.
+
+---
+
+## 3. Step 2 — The creature
+
+**Problem.** The spec describes a creature as a circle with eyes (range, field of
+view), a nose (pheromone radius), movement (speed, agility, costing energy) and a
+mouth (eats plants and creatures) — plus, separately, that *"new attributes will be
+added over time by birth of new mutations"*.
+
+Those two requirements pull hard against each other. The obvious reading of the
+bullet list is a class with fixed fields — `float Speed; float VisionRange;` — and
+that reading makes the mutation system a rewrite of the creature, the renderer and
+every overlay the moment an attribute nobody planned for appears.
+
+**Approach.**
+
+- **The creature is a genome, not a struct of named fields.** Traits are a
+  `float[]` indexed by `TraitAxis`; acquired attributes are a `ulong` bitmask.
+  Mutation perturbs "some trait" and the overlay lists "every trait", and both
+  simply iterate. `docs/GENOME.md` has the full design.
+- **Node ids are derived from the trait catalog, not allocated by a counter**
+  (`Sensor(slot, channel) = base + slot*32 + channel`). A given sensor therefore has
+  the same id in every genome in every run, with no registry to keep in sync — and
+  unlocking an attribute is just inserting the ids it declares.
+- **Evaluability is structural.** No mutation removes a node; connections are only
+  made between existing nodes; adding a neuron splits an existing connection. A
+  dangling reference is unconstructible, so there is no validation pass that could
+  itself be buggy.
+- **Brain evaluation is a single pass over the previous tick's activations.** This
+  makes cycles and self-loops legal by construction — no topological sort to get
+  wrong, no cycle detection to keep correct across every mutation operator — at a
+  cost of one tick of propagation delay per layer.
+- **An unlock wires itself in immediately.** Every new sensor gets an outgoing edge
+  and every new effector an incoming one. Otherwise the attribute costs upkeep while
+  being invisible to the brain, and selection deletes it before it can ever be
+  useful — the standard reason this kind of system quietly does nothing.
+- **One overlay renderer iterating the genome**, not one per body part. When a
+  mutation unlocks an attribute the game has never displayed, it appears in the
+  panel and its nodes appear in the brain graph with no rendering code written for
+  it. Verified: the screenshot below shows Cellulose gut and Toxin resistance listed,
+  and the brain grown from 36n/46c to 41n/55c, without a line of trait-specific
+  drawing.
+
+**The Step 2 / Step 3 seam.** A creature senses plants and pheromones, both of
+which are Step 3 work. Rather than reorder the spec's steps, `ISenseField` defines
+the sensing surface and `LabWorld` backs it with brute-force scans over a dozen
+hand-placed plants and a pheromone grid that decays but does not diffuse. Step 3
+replaces the implementation. **If that swap requires touching creature code, the
+interface was drawn in the wrong place and the interface is what should change.**
+
+**Appearance**, chosen by the owner, each decision one the body makes a trait
+visible rather than decoration:
+
+- **Body**: filled disc with a darker rim, plus a brighter inner core. The core's
+  *area* — not its radius — is proportional to energy; the eye judges discs by area,
+  so a radius-linear core reads as far emptier than the creature is.
+- **Colour**: hue is the inherited `Hue` trait, so a lineage is recognisable on
+  sight and can be watched spreading; brightness carries energy, but gently, so it
+  does not fight the core for attention. Hue is also what `ColorVision` reads, which
+  makes body colour a signalling channel evolution can exploit.
+- **Eyes**: two dots on the forward rim, separated by the field-of-view angle — a
+  wide-FOV creature visibly has wide-set eyes. They are also the only heading cue;
+  nothing else marks facing. A rear pair appears if `RearEye` is unlocked.
+- **Nose**: nothing on the body. A third mark would compete with the eyes and core
+  on a creature that is often a few pixels across; smell lives in the `N` overlay.
+- **Mouth**: a warm band on the rim spanning the bite arc, flaring bright while
+  feeding — so eating is watchable rather than inferred from a number. Tinted rather
+  than merely darkened, or it reads as "the rim, slightly shaded".
+
+**Verified.** 65 tests. The ones that earn their keep: 3000 chained mutations at
+inflated rates, every result still compiling to a brain with finite bounded outputs;
+a self-loop weighted 50 staying bounded over 10 000 ticks; every one of the twelve
+attributes adding exactly the nodes it declares *and* having them wired in;
+prerequisites never violated by a random unlock; vision respecting range, field of
+view, occlusion and toroidal wrapping; and the energy relationships that must hold
+for selection to mean anything (size costs, attributes cost, doubling speed costs
+more than double).
+
+Visually confirmed in the lab: a creature moving under brain control, its vision
+rays terminating on a plant, the mouth band, the energy core, and the attribute
+panel listing acquired traits.
+
+**Files:** `src/GoL.Sim/Genetics/{TraitAxis,NodeIds,LatentTraits,Genome,Mutator}.cs`,
+`src/GoL.Sim/Brains/Brain.cs`,
+`src/GoL.Sim/Core/{Pcg32,Creature,Eye,ISenseField,Senses,SensorLayout,Metabolism,Locomotion,LabWorld}.cs`,
+`src/GoL.Render/{CreatureRenderer,SenseOverlayRenderer,InspectorRenderer,OverlayFlags}.cs`,
+`src/GoL.App/Screens/CreatureLabScreen.cs`, `docs/GENOME.md`,
+`tests/GoL.Sim.Tests/{GenomeMutation,LatentTrait,Sensing,Metabolism}Tests.cs`.
+
+**Gotchas found.**
+
+- `kill` on a backgrounded `dotnet run` kills the wrapper, not the game — a stale
+  window survived and was screenshotted as if it were the new build. Use
+  `pkill -f GoL.App`.
+- Every sensing query writes into a caller-owned span and returns a count. The
+  scratch buffer grows when a result fills it exactly, which is the only signal the
+  field has that it may have truncated — silent truncation would blind a creature to
+  whatever sorted last.
+- Distances must go through `ISenseField.Offset`, never plain subtraction, or
+  creatures go blind at the world seam. There is a test for exactly this.
+
+**Open risk.** A newly unlocked attribute arrives with random wiring and immediate
+upkeep, so it is usually worse than its parent and gets selected straight back out.
+This is the most likely reason the headline feature could appear not to work once
+populations run in Step 4. Mitigations, in escalation order, are in `docs/GENOME.md`.

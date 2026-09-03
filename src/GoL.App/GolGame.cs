@@ -67,6 +67,7 @@ public sealed class GolGame : Game
         Environment.GetEnvironmentVariable("GOL_SCREEN")?.Trim().ToLowerInvariant() switch
         {
             "config" => new ConfigScreen(this),
+            "lab" => new CreatureLabScreen(this),
             _ => new MainMenuScreen(this),
         };
 
