@@ -6,8 +6,27 @@
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build",
-      "program": "${workspaceFolder}/dest/GoL.App/Debug/net8.0/GoL.App.dll",
-      "cwd": "${workspaceFolder}/dest/GoL.App/Debug/net8.0",
+      "program": "/Users/samuelsayag/Projects/c#/GoL/dest/GoL.App/Debug/net8.0/GoL.App.dll",
+      "cwd": "/Users/samuelsayag/Projects/c#/GoL/dest/GoL.App/Debug/net8.0",
+      "console": "internalConsole",
+      "stopAtEntry": false,
+      "env": {
+        "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:/usr/local/lib"
+      },
+      "logging": {
+        "engineLogging": true,
+        "moduleLoad": false
+      }
+    },
+    {
+      "name": "Debug GoL (via dotnet host)",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "/usr/local/share/dotnet/dotnet",
+      "args": [
+        "/Users/samuelsayag/Projects/c#/GoL/dest/GoL.App/Debug/net8.0/GoL.App.dll"
+      ],
+      "cwd": "/Users/samuelsayag/Projects/c#/GoL/dest/GoL.App/Debug/net8.0",
       "console": "internalConsole",
       "stopAtEntry": false,
       "env": {
