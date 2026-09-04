@@ -100,6 +100,41 @@ and delete the file.
 The two settings files above stay useful regardless — they make the repo work for
 anyone cloning it who has not done this to their own machine.
 
+### `program ''` in the debugger: a bad `DOTNET_ROOT`
+
+If F5 fails with `launch: program '' does not exist` even though `launch.json`
+names a real dll, the cause is **not** in `launch.json` — C# Dev Kit registers its
+own debug configuration provider for `coreclr`, and when its language server is
+dead it supplies a configuration with an empty `program`, overriding the one on
+disk. Changing `launch.json` therefore has no effect at all, which is what makes
+this so confusing to chase.
+
+The server was dead because of one wrong character class in a user setting:
+
+```jsonc
+// wrong - a directory
+"dotnetAcquisitionExtension.sharedExistingDotnetPath": "/usr/local/share/dotnet"
+// right - the executable
+"dotnetAcquisitionExtension.sharedExistingDotnetPath": "/usr/local/share/dotnet/dotnet"
+```
+
+Dev Kit takes the **dirname** of that value to build `DOTNET_ROOT`, so a directory
+loses a segment and yields `DOTNET_ROOT=/usr/local/share`, where no runtime lives.
+`dotnetAcquisitionExtension.allowInvalidPaths: true` suppresses the complaint, so
+it fails silently.
+
+**The evidence lives in the logs**, not in the popup:
+
+```bash
+tail -60 ~/Library/Application\ Support/Code/logs/*/window1/exthost/ms-dotnettools.csdevkit/C\#\ Dev\ Kit.log
+```
+
+A healthy start logs `.NET SDK found`; a broken one logs
+`.NET server STDERR: You must install .NET to run this application`, prints the
+`DOTNET_ROOT` it used, and ends `.NET server exited with 131`. Reach for that log
+first next time — three rounds were spent editing `launch.json`, which was never
+the problem.
+
 Unrelated but adjacent: `/etc/paths.d/dotnet-cli-tools` has **no trailing
 newline**, so `path_helper` glues it to the next file and a login shell ends up
 with a literal, unexpanded `~/.dotnet/tools` in `PATH`. Harmless, but it means
