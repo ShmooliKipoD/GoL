@@ -37,6 +37,25 @@ dotnet test                              # needs no env var - see below
 In VS Code the `build`/`run` tasks and the **Debug GoL** launch config already
 inject it; press F5.
 
+### Why the VS Code tasks use an absolute path to `dotnet`
+
+`.vscode/tasks.json` sets `"command": "/usr/local/share/dotnet/dotnet"` and puts
+that directory on `PATH`. Both are needed, for different reasons, and reverting
+either brings a distinct failure back:
+
+- `"type": "process"` launches the executable directly, resolved against **VS
+  Code's own** `PATH`. macOS registers dotnet in `/etc/paths.d/dotnet`, but that
+  file is read by `path_helper` only during **login shell** startup, so a VS Code
+  launched from the Dock or Finder never sees it — the task then fails with
+  `Path to shell executable "dotnet" does not exist`. Switching to
+  `"type": "shell"` does **not** fix it: VS Code runs the shell non-interactively,
+  which skips `.zshrc` too.
+- The build spawns *further* dotnet processes — MGCB compiles the spritefont
+  through dotnet local tools — and those look `dotnet` up on `PATH`. A content
+  build that cannot find it fails **without failing the build**, which is one of
+  the ways the `ContentLoadException: Content/Fonts/UiFont.xnb` crash below
+  arrives.
+
 ## Architecture
 
 Five projects. The dependency direction is the whole design:
