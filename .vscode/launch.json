@@ -3,6 +3,12 @@
   "configurations": [
     {
       "name": "Debug GoL",
+      "type": "dotnet",
+      "request": "launch",
+      "projectPath": "${workspaceFolder}/src/GoL.App/GoL.App.csproj"
+    },
+    {
+      "name": "Debug GoL (coreclr fallback)",
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build",
