@@ -127,7 +127,7 @@ public sealed class BoardEnvironment : IEnvironment, ISenseField
         if (take <= 0f) return;
 
         float digestibility = PlantSpecs.Digestibility(kind, genome);
-        energy.Current = MathF.Min(energy.Maximum, energy.Current + take * digestibility);
+        energy.Gain(take * digestibility);
 
         mind.BitThisTick = true;
     }
@@ -155,7 +155,7 @@ public sealed class BoardEnvironment : IEnvironment, ISenseField
 
                 var kind = _plants.KindAt(index);
                 if (kind == PlantKind.None) continue;
-                if (_plants.EnergyAt(index) <= 0.05f) continue;
+                if (_plants.EnergyAt(index) < Metabolism.WorthBiting) continue;
 
                 var offset = Offset(body.Position, _plants.CentreOf(index));
                 float distance = offset.Length() - PlantSpecs.Get(kind).Radius;

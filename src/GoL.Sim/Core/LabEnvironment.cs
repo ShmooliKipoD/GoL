@@ -12,8 +12,8 @@ public sealed class LabPlant
     public int Id;
     public Vector2 Position;
     public float Radius = 4f;
-    public float Energy = 12f;
-    public float MaxEnergy = 12f;
+    public float Energy = 35f;
+    public float MaxEnergy = 35f;
     public bool Alive => Energy > 0.05f;
 }
 
@@ -52,7 +52,7 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
 
     public IReadOnlyList<LabPlant> Plants => _plants;
 
-    public LabPlant AddPlant(Vector2 position, float energy = 12f)
+    public LabPlant AddPlant(Vector2 position, float energy = 35f)
     {
         var plant = new LabPlant
         {
@@ -76,8 +76,15 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
     public void Step(SimWorld world, float dt)
     {
         DecayScent(dt);
+
+        // Only living plants regrow. This used to run over every plant in the list
+        // including stripped ones, so an eaten green silently came back from zero -
+        // the same zombie-green problem the board grid had.
         foreach (var plant in _plants)
+        {
+            if (!plant.Alive) continue;
             plant.Energy = MathF.Min(plant.MaxEnergy, plant.Energy + 1.2f * dt);
+        }
     }
 
     public void ResolveBite(
@@ -91,7 +98,7 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
 
         foreach (var plant in _plants)
         {
-            if (!plant.Alive) continue;
+            if (plant.Energy < Metabolism.WorthBiting) continue;
 
             var offset = Offset(body.Position, plant.Position);
             float distance = offset.Length() - plant.Radius;
@@ -107,9 +114,27 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
 
         float take = MathF.Min(Metabolism.BiteRate * dt, best.Energy);
         best.Energy -= take;
-        energy.Current = MathF.Min(
-            energy.Maximum, energy.Current + take * genome.Trait(TraitAxis.DigestGrass));
+        energy.Gain(take * genome.Trait(TraitAxis.DigestGrass));
         mind.BitThisTick = true;
+
+        // Eaten greens are gone. A replacement seeds elsewhere so the arena cannot
+        // empty - the lab exists to demonstrate feeding, repeatedly.
+        if (!best.Alive) ReplacePlant(best);
+    }
+
+    /// <summary>
+    /// Moves a consumed plant somewhere new, keeping the arena's plant count fixed.
+    /// <para>
+    /// Reuses the object rather than removing and adding, so the list length and id
+    /// order never change - the lab's queries walk it in id order, and anything
+    /// accumulated over that order has to stay reproducible.
+    /// </para>
+    /// </summary>
+    private void ReplacePlant(LabPlant plant)
+    {
+        plant.Position = new Vector2(
+            _rng.NextFloat(0f, WorldSize), _rng.NextFloat(0f, WorldSize));
+        plant.Energy = plant.MaxEnergy;
     }
 
     /// <summary>The lab leaves no corpse; carrion is a board concern.</summary>

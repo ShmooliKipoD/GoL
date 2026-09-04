@@ -34,13 +34,56 @@ public sealed class Body
     }
 }
 
-/// <summary>Stored energy and what it is worth.</summary>
+/// <summary>Stored energy, what it is worth, and what has been eaten to get it.</summary>
 public sealed class Energy
 {
     public float Current;
     public float Maximum;
 
+    /// <summary>Calories absorbed over this creature's whole life.</summary>
+    public float LifetimeIntake;
+
+    /// <summary>Calories absorbed this tick. Cleared by <c>SenseSystem</c> at the
+    /// top of the tick, alongside <see cref="Mind.BitThisTick"/>.</summary>
+    public float IntakeThisTick;
+
+    /// <summary>
+    /// Smoothed intake, energy per second. Smoothed because the raw per-tick value
+    /// is either one bite's worth or zero, which flickers far too fast to read.
+    /// </summary>
+    public float IntakeRate;
+
     public float Fraction => Maximum > 0f ? Math.Clamp(Current / Maximum, 0f, 1f) : 0f;
+
+    /// <summary>
+    /// Absorbs food. <b>The only way energy is ever credited</b> - both environments
+    /// used to clamp by hand, and two copies of that is how the two feeding paths
+    /// would have drifted apart. Recording intake here also makes the readout
+    /// physically unable to disagree with the energy it is reporting on.
+    /// </summary>
+    public void Gain(float amount)
+    {
+        if (amount <= 0f) return;
+
+        float before = Current;
+        Current = MathF.Min(Maximum, Current + amount);
+
+        // Credit what was actually absorbed, not what was offered: a full creature
+        // biting a plant gains nothing, and the readout should say so.
+        float absorbed = Current - before;
+        LifetimeIntake += absorbed;
+        IntakeThisTick += absorbed;
+    }
+
+    /// <summary>Folds this tick's intake into the smoothed rate.</summary>
+    public void TrackIntake(float dt)
+    {
+        if (dt <= 0f) return;
+
+        const float smoothing = 2.5f;
+        float instant = IntakeThisTick / dt;
+        IntakeRate += (instant - IntakeRate) * MathF.Min(1f, smoothing * dt);
+    }
 }
 
 /// <summary>Age, poison and breeding history - everything that tracks a life.</summary>

@@ -485,3 +485,83 @@ taller than the window and overflows. It is only reachable through `GOL_LAB_TRAI
 `src/GoL.Render/{InspectorRenderer,OverlayFlags}.cs`;
 `src/GoL.App/Screens/{Board,CreatureLab}Screen.cs`;
 `tools/GoL.Headless/Program.cs`; `tests/GoL.Sim.Tests/{ActionTests,MetabolismTests}.cs`.
+
+---
+
+## 7. Step 3d — Greens get eaten, eating pays, and the intake is visible
+
+**Problem.** Watching a creature in the Creature Lab, the owner saw it detect a
+green, close, bite — and its energy kept falling. *"He does not gain any calories."*
+And: *"green should also be consumed — when all calories are eaten, the green should
+disappear."*
+
+Both bite paths already credited energy, so nothing was plainly broken. Three things
+combined.
+
+**1. An eaten green never went away**, and that was deliberate. `PlantGrid.Consume`
+said so outright — *"a living plant regrows from its roots"* — keeping the cell as
+`Grass` at zero energy. The lab was worse: `Step` regrew *every* plant in the list
+including dead ones. The result was an invisible zombie green a creature could sit
+on forever, grazing regrowth at 0.66/s against 1.17/s of upkeep. Now a stripped cell
+is cleared, for every kind.
+
+**2. The gain was invisible.** One tick of biting grass credits 0.20 energy, and the
+panel prints energy as a whole number out of 193. Feeding could not move the display
+at all. Nothing anywhere answered "is this creature taking in calories?"
+
+**3. Density, not per-plant value, was the real constraint.** This was the finding
+that mattered, and it only appeared once the intake readout existed. In the lab,
+measured intake was **0.00/s across every seed tried** — creatures were not eating
+*at all*, then starving in about two minutes. The board works because it is roughly
+**seventy times denser** in plants per unit area. Fourteen morsels in a 340-unit
+arena is not a food supply an untrained brain can find. The lab now seeds 240.
+
+**A pre-existing bug surfaced on the way.** The plan said to read the new fertility
+column first, and it read 0.02 — soil pinned at nothing. Running with **zero
+creatures** proved it had nothing to do with grazing: mean fertility still fell from
+0.5 to 0.02 in 4500 ticks. Two causes, both real:
+
+- `Drain` was called per *plant* cell but applied to the coarser fertility grid with
+  no scaling, so four plant cells each charged the full amount — a unit error, now
+  scaled by the area ratio;
+- `RegrowthRate` was 0.02, and a cell settles at `ceiling - drain/RegrowthRate`, so
+  any drain above ~0.012/s pinned it at zero. Grass drained 0.35.
+
+That mattered more than it looks: fruit needs `MinFertility 0.55`, so on dead soil
+**fruit went permanently extinct within a minute**, the fertility sensor read zero
+everywhere, and the value-noise terrain the board is built on meant nothing. Soil now
+settles around 0.47.
+
+**Accounting.** Both environments duplicated the clamp-and-credit; both now go
+through `Energy.Gain`, which clamps, records `LifetimeIntake`, and credits what was
+absorbed rather than what was offered. `IntakeRate` is smoothed, because the raw
+per-tick value is 0.20 or 0 and flickers uselessly. The inspector gained a line —
+`+2.4/s   eaten 118`, coloured by sign — and the soak runner gained intake, net,
+live plant count and mean fertility columns.
+
+**Result.** The lab, which was the actual complaint, now works: 8 creatures become
+75 over 20 000 ticks, generation 4, intake climbing to 2.36/s and net positive —
+selection visibly favouring creatures that eat. On the board, the population no
+longer collapses: it used to reach **zero by tick 27 000**, and now grows.
+
+**What is not fixed, and is deliberately left for Step 4.** It now grows *without
+bound* — 120 → 1755 by tick 20 000 — with vegetation carpeting the map. I traded a
+collapse for a runaway. Four levers were tried against it (plant energy, growth
+rate, spread chance, a soil-exhaustion die-off) and each moved the balance without
+bounding it, at which point this was plainly the population-balance work Step 4
+exists for rather than something to smuggle in here. The die-off mechanism is kept
+and directly tested, but on typical soil it rarely fires.
+
+**Verified.** 112 tests, up from 101. New ones pin that a fully eaten green is
+removed and a partly eaten one is not, that intake and energy cannot disagree, that
+scraps are not chosen over a meal, that a stripped world recovers, that ambient
+seeding never produces carrion, and that the lab holds its plant count. One existing
+test, `PlantsGrowBack_AfterBeingGrazed`, encoded the old contract and was updated to
+the new one.
+
+**Files:** `src/GoL.Sim/Board/{PlantGrid,Plants,FertilityField,BoardEnvironment}.cs`,
+`src/GoL.Sim/Core/{LabEnvironment,Metabolism,CreatureView}.cs`,
+`src/GoL.Sim/Components/Components.cs`, `src/GoL.Sim/Systems/{Sense,Energy}System.cs`,
+`src/GoL.Sim/SimConfig.cs`, `src/GoL.Render/InspectorRenderer.cs`,
+`src/GoL.App/Screens/CreatureLabScreen.cs`, `tools/GoL.Headless/Program.cs`,
+`tests/GoL.Sim.Tests/{FeedingTests,BoardTests}.cs`.

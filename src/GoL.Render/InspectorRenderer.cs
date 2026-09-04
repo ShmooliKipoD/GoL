@@ -54,6 +54,18 @@ public sealed class InspectorRenderer
             new Vector2(x, y), Palette.Ink, Scale);
         y += lineHeight;
 
+        // The line that answers "is this creature actually taking in calories?".
+        // One tick of biting grass credits about 0.2 energy against a maximum in the
+        // hundreds, so the energy figure above cannot show feeding at all - it took
+        // watching a creature bite a plant and seeing nothing move to notice.
+        var energy = creature.Energy;
+        float net = energy.IntakeRate - creature.UpkeepRate;
+
+        string intake = $"{(net >= 0f ? "+" : "")}{net:0.0}/s   eaten {energy.LifetimeIntake:0}";
+        text.Draw(intake, new Vector2(x, y),
+            net >= 0f ? Palette.Accent : Palette.Danger, Scale);
+        y += lineHeight;
+
         text.Draw($"brain {creature.Mind.Brain.NodeCount}n {creature.Mind.Brain.ConnCount}c",
             new Vector2(x, y), Palette.InkDim, Scale);
         y += lineHeight * 1.5f;

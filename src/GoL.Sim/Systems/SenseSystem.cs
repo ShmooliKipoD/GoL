@@ -51,6 +51,7 @@ public sealed class SenseSystem : SimSystem
 
             var mind = _mind.Get(id);
             mind.BitThisTick = false;
+            _energy.Get(id).IntakeThisTick = 0f;
 
             var subject = new SenseSubject(
                 id, _body.Get(id), _energy.Get(id), vitals,

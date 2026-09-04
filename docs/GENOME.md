@@ -235,6 +235,41 @@ fewer special case.
 Reproduction needs all four of: the brain asking, age past `MatureAge`, energy above
 `ReproduceThreshold`, and 3 s since the last birth.
 
+## Eating
+
+A bite draws `BiteRate` energy per second from the target, and the eater absorbs
+`take × Digestibility(kind, genome)`. Both environments credit it through
+`Energy.Gain`, which is the **only** way energy is ever added: it clamps to the
+maximum and records `LifetimeIntake` in the same place, so the intake readout cannot
+disagree with the energy it reports on. It also credits what was *absorbed* rather
+than what was offered, so a full creature biting a plant correctly gains nothing.
+
+**An eaten green is gone.** A stripped plant used to stay in place at zero energy
+and refill from its roots, which left an invisible plant a creature could sit on
+forever, grazing regrowth for less than its own upkeep. Now the cell is cleared, so
+food has to be found again — which is what makes foraging worth evolving. Partial
+grazing is still survivable; only a plant eaten to nothing disappears.
+
+Because spread only ever fills a cell beside a living plant, destructible greens
+introduced a way for a kind to be eaten to extinction with no path back. A **low-rate
+ambient reseed** is the floor against that, gated on `SpreadChance > 0` so it can
+never conjure carrion, and on the same soil limits everything else obeys.
+
+A plant that has exhausted the soil under it **dies off**, reusing its own
+`MinFertility` as the line. Without that, nothing removes a plant except being
+eaten, and vegetation only ever spreads.
+
+### Density is the lever, not per-plant value
+
+What a creature experiences is how *often* it finds food, not how fat each morsel
+is. The Creature Lab had 14 plants in a 340-unit arena and a creature there
+essentially never ate — measured intake **0.00/s across every seed tried**, starving
+in about two minutes. The board works because it is roughly **seventy times denser**
+in plants per unit area: a creature there cannot avoid food. The lab now seeds 240,
+putting mean nearest-plant distance inside the eye.
+
+Reach for density before reaching for `MaxEnergy`.
+
 ## Known risk
 
 A newly unlocked attribute arrives with random wiring and immediate upkeep, so it is

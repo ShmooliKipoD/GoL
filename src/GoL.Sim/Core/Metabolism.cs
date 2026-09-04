@@ -64,6 +64,14 @@ public static class Metabolism
     /// <summary>Energy per second a bite draws from its target.</summary>
     public const float BiteRate = 22f;
 
+    /// <summary>
+    /// Least energy a plant must hold to be chosen as a bite target. Above the mere
+    /// "still alive" threshold on purpose: a nearly stripped plant that happens to
+    /// be nearest would otherwise be picked over a full one just behind it, and the
+    /// creature would work through the scraps while the meal went untouched.
+    /// </summary>
+    public const float WorthBiting = 1.0f;
+
     /// <summary>Fraction of a creature's energy lost as overhead when reproducing.</summary>
     public const float BirthOverhead = 0.12f;
 

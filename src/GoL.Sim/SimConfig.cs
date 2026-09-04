@@ -43,7 +43,10 @@ public sealed record SimConfig
 
     /// <summary>Energy per second burned by simply existing, before size, brain
     /// complexity and unlocked-trait upkeep are added.</summary>
-    public float BaseMetabolicRate { get; init; } = 0.35f;
+    public float BaseMetabolicRate { get; init; } = DefaultBaseMetabolicRate;
+
+    /// <summary>Named so read-only views can quote upkeep without carrying a config.</summary>
+    public const float DefaultBaseMetabolicRate = 0.35f;
 
     /// <summary>Fraction of maximum energy a creature must hold to reproduce.</summary>
     public float ReproductionEnergyFraction { get; init; } = 0.65f;

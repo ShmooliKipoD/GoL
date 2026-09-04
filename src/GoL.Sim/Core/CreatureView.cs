@@ -60,6 +60,15 @@ public readonly struct CreatureView
     /// the deadband.</summary>
     public string ActionLabel => Behaviour.Label();
 
+    /// <summary>
+    /// Energy per second this creature burns just existing, before movement. Paired
+    /// with <see cref="Components.Energy.IntakeRate"/> it answers the only question
+    /// that matters while watching one forage: is it winning or losing?
+    /// </summary>
+    public float UpkeepRate => Metabolism.BaseCost(
+        Body, Genome, Mind.Brain, Vitals, SimConfig.DefaultBaseMetabolicRate,
+        Mind.Intent.Torpor);
+
     public Vector2 Forward => Body.Forward;
     public Vector2 NosePosition => Body.Position + Body.Forward * Body.Radius;
     public float MouthRange => Body.Radius + Genes.Trait(TraitAxis.MouthReach);

@@ -52,6 +52,14 @@ public static class PlantSpecs
     public static PlantSpec Get(PlantKind kind) => Specs[(int)kind];
 
     /// <summary>
+    /// The kinds that can appear on their own. Gated on <c>SpreadChance &gt; 0</c>,
+    /// which excludes carrion - it neither grows nor spreads and is planted only by
+    /// a death, so seeding it would conjure corpses from nothing.
+    /// </summary>
+    public static readonly PlantSpec[] Seedable =
+        Array.FindAll(Specs, s => s is not null && s.SpreadChance > 0f);
+
+    /// <summary>
     /// Energy actually gained from a bite, after the eater's digestion.
     /// <para>
     /// This is where the latent attributes cash out: bramble is worth nothing
@@ -85,20 +93,20 @@ public static class PlantSpecs
 
         // Common, fast, spreads readily onto anything but barren ground.
         specs[(int)PlantKind.Grass] =
-            new(PlantKind.Grass, 12f, 1.2f, 0.5f, 0.060f, 0.15f, 1f, 0.35f, 3.0f);
+            new(PlantKind.Grass, 12f, 1.2f, 0.5f, 0.010f, 0.15f, 1f, 0.020f, 3.0f);
 
         // Rare and rich. Needs good soil and drains it hard, so fruit patches move.
         specs[(int)PlantKind.Fruit] =
-            new(PlantKind.Fruit, 45f, 0.35f, 0.2f, 0.008f, 0.55f, 1f, 0.90f, 4.5f);
+            new(PlantKind.Fruit, 45f, 0.35f, 0.2f, 0.008f, 0.55f, 1f, 0.100f, 4.5f);
 
         // Colonises land the others have exhausted - which is what makes the
         // cellulose gut worth its upkeep.
         specs[(int)PlantKind.Bramble] =
-            new(PlantKind.Bramble, 26f, 0.7f, 0.4f, 0.050f, 0.05f, 1f, 0.15f, 3.5f);
+            new(PlantKind.Bramble, 26f, 0.7f, 0.4f, 0.010f, 0.05f, 1f, 0.015f, 3.5f);
 
         // Only on poor ground, so it is the reward for going where food is scarce.
         specs[(int)PlantKind.Blightcap] =
-            new(PlantKind.Blightcap, 60f, 0.5f, 0.3f, 0.020f, 0f, 0.25f, 0.20f, 4.0f);
+            new(PlantKind.Blightcap, 60f, 0.5f, 0.3f, 0.020f, 0f, 0.25f, 0.020f, 4.0f);
 
         // Does not grow or spread; decays.
         specs[(int)PlantKind.Carrion] =

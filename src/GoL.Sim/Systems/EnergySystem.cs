@@ -45,6 +45,10 @@ public sealed class EnergySystem : SimSystem
 
             var mind = _mind.Get(id);
 
+            // After feeding, before the charge: this folds what was just eaten into
+            // the smoothed rate the inspector reads.
+            _energy.Get(id).TrackIntake(dt);
+
             Locomotion.Tick(
                 _body.Get(id), _energy.Get(id), vitals,
                 _genes.Get(id).Genome, mind.Brain, baseRate, dt, mind.Intent.Torpor);

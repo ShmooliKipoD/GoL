@@ -71,7 +71,8 @@ for (int i = 0; i < creatures; i++)
 
 Console.WriteLine($"{(lab ? "lab" : "board")}  seed {seed}  {creatures} creatures  "
     + $"world {worldSize:F0}  {ticks} ticks{(unlockAll ? "  (all attributes granted)" : "")}");
-Console.WriteLine($"{"tick",8} {"pop",6} {"gen",5} {"mean E",9}  attributes");
+Console.WriteLine($"{"tick",8} {"pop",6} {"gen",5} {"mean E",9} {"in/s",7} {"net/s",7} "
+    + $"{"plants",7} {"soil",6}  attributes");
 
 var stopwatch = Stopwatch.StartNew();
 int report = Math.Max(1, ticks / 10);
@@ -85,7 +86,7 @@ for (int tick = 1; tick <= ticks; tick++)
 {
     world.Step();
     Accumulate(world, histogram, ref chasing, ref fleeing, ref idle, ref total);
-    if (tick % report == 0) Report(world, tick);
+    if (tick % report == 0) Report(world, tick, environment);
 }
 
 stopwatch.Stop();
@@ -164,23 +165,53 @@ static void Accumulate(
     }
 }
 
-static void Report(SimWorld world, int tick)
+static void Report(SimWorld world, int tick, IEnvironment environment)
 {
-    float meanEnergy = 0f;
+    float meanEnergy = 0f, meanIntake = 0f;
     var living = world.Living;
 
     for (int i = 0; i < living.Count; i++)
-        meanEnergy += world.Get<GoL.Sim.Components.Energy>(living[i]).Current;
+    {
+        var energy = world.Get<GoL.Sim.Components.Energy>(living[i]);
+        meanEnergy += energy.Current;
+        meanIntake += energy.IntakeRate;
+    }
 
-    if (living.Count > 0) meanEnergy /= living.Count;
+    if (living.Count > 0) { meanEnergy /= living.Count; meanIntake /= living.Count; }
+
+    // Upkeep is not reported directly, so net is derived from what intake has to
+    // beat: a population whose net is negative is dying, whatever the count says.
+    float meanUpkeep = 0f;
+    for (int i = 0; i < living.Count; i++)
+    {
+        int id = living[i];
+        meanUpkeep += Metabolism.BaseCost(
+            world.Get<GoL.Sim.Components.Body>(id),
+            world.Get<GoL.Sim.Components.Genes>(id).Genome,
+            world.Get<GoL.Sim.Components.Mind>(id).Brain,
+            world.Get<GoL.Sim.Components.Vitals>(id),
+            world.Config.BaseMetabolicRate);
+    }
+    if (living.Count > 0) meanUpkeep /= living.Count;
+
+    // Plant count and soil are the early warning. A stripped world shows here long
+    // before it shows in the population, and soil separates "grazed" from
+    // "running down" - which look identical from the plant count alone.
+    string plants = "-", soil = "-";
+    if (environment is BoardEnvironment board)
+    {
+        plants = board.Plants.LiveCount().ToString(CultureInfo.InvariantCulture);
+        soil = board.Fertility.Mean().ToString("F2", CultureInfo.InvariantCulture);
+    }
 
     string attributes = world.UnlockTimeline.Count == 0
         ? "-"
         : string.Join(" ", world.UnlockTimeline.Keys.OrderBy(k => (int)k));
 
     Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-        "{0,8} {1,6} {2,5} {3,9:F1}  {4}",
-        tick, world.Population, world.MaxGeneration, meanEnergy, attributes));
+        "{0,8} {1,6} {2,5} {3,9:F1} {4,7:F2} {5,7:F2} {6,7} {7,6}  {8}",
+        tick, world.Population, world.MaxGeneration, meanEnergy,
+        meanIntake, meanIntake - meanUpkeep, plants, soil, attributes));
 }
 
 static int ArgInt(string[] args, string name, int fallback)

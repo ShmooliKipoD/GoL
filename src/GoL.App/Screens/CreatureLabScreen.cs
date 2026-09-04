@@ -24,7 +24,23 @@ namespace GoL.App.Screens;
 /// </summary>
 public sealed class CreatureLabScreen : GolScreen
 {
-    private const int PlantCount = 14;
+    /// <summary>
+    /// Enough greens that an untrained brain actually finds one.
+    /// <para>
+    /// This was 14, and at that density a lab creature essentially never ate - the
+    /// soak runner reports its intake as 0.00/s across every seed tried, and it
+    /// starves in about two minutes. The board works only because it is roughly
+    /// <b>seventy times denser</b> in plants per unit area; a creature there cannot
+    /// avoid food, while in the lab it had to find one of fourteen morsels in a
+    /// 340-unit arena by luck.
+    /// </para>
+    /// <para>
+    /// 240 puts mean nearest-plant distance at about 11 units - inside the eye - and
+    /// still covers only a tenth of the ground, so the arena reads as a meadow
+    /// rather than a carpet.
+    /// </para>
+    /// </summary>
+    private const int PlantCount = 240;
 
     /// <summary>Margin around the arena, in pixels.</summary>
     private const float ArenaMargin = 28f;

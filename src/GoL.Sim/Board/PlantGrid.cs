@@ -49,6 +49,15 @@ public sealed class PlantGrid
 
     public PlantKind KindAt(int index) => _kind[index];
     public float EnergyAt(int index) => _energy[index];
+
+    /// <summary>Cells currently holding a plant. The soak runner's early warning:
+    /// a world being stripped shows here long before it shows in the population.</summary>
+    public int LiveCount()
+    {
+        int n = 0;
+        for (int i = 0; i < _kind.Length; i++) if (_kind[i] != PlantKind.None) n++;
+        return n;
+    }
     public float MaturityAt(int index) => _maturity[index];
 
     public Vector2 CentreOf(int index)
@@ -85,12 +94,12 @@ public sealed class PlantGrid
         float taken = MathF.Min(amount, _energy[index]);
         _energy[index] -= taken;
 
-        // Carrion vanishes when eaten; a living plant regrows from its roots.
-        if (_energy[index] <= 0.05f)
-        {
-            if (_kind[index] == PlantKind.Carrion) Clear(index);
-            else _energy[index] = 0f;
-        }
+        // Eaten is eaten - for every kind, not just carrion. A stripped plant used
+        // to stay in place at zero energy and refill from its roots, which left an
+        // invisible green a creature could sit on forever, grazing regrowth for less
+        // than its own upkeep. Clearing the cell means food has to be found again,
+        // which is what makes foraging a behaviour worth evolving.
+        if (_energy[index] <= 0.05f) Clear(index);
 
         return taken;
     }
@@ -122,6 +131,21 @@ public sealed class PlantGrid
 
             float soil = fertility.At(index);
 
+            // A plant that has exhausted its own ground dies off. Without this
+            // nothing removes a plant except being eaten, so vegetation only ever
+            // spreads and the map carpets over - food everywhere, no reason to
+            // forage, and the "sit on grass and bud forever" strategy wins.
+            // Reusing MinFertility means the die-off line is the same line that
+            // decides where the kind may grow at all, so a patch that drains its
+            // soil below what it needs vacates the ground and lets it recover:
+            // boom-and-bust patches that move, which is what the fertility field
+            // was built for.
+            if (soil < spec.MinFertility * DieOffMargin)
+            {
+                Clear(index);
+                continue;
+            }
+
             _energy[index] = MathF.Min(spec.MaxEnergy, _energy[index] + spec.GrowthRate * sweepDt * soil);
             _maturity[index] = MathF.Min(1f, _maturity[index] + spec.MaturityRate * sweepDt);
 
@@ -129,6 +153,50 @@ public sealed class PlantGrid
 
             if (_maturity[index] >= 1f && rng.Chance(spec.SpreadChance))
                 TrySpread(index, kind, spec, fertility, ref rng);
+        }
+
+        AmbientSeed(bucket, fertility, sweepDt, ref rng);
+    }
+
+    /// <summary>Chance per empty cell per sweep that a kind appears from nowhere.</summary>
+    private const float AmbientSeedChance = 0.00004f;
+
+    /// <summary>
+    /// How far below its own <c>MinFertility</c> a plant is allowed to sit before it
+    /// dies. Below 1 so the die-off line is under the line for seeding, leaving a
+    /// band where a plant survives on ground it could not have colonised - without
+    /// that gap, cells flicker between planted and cleared on the boundary.
+    /// </summary>
+    private const float DieOffMargin = 0.8f;
+
+    /// <summary>
+    /// A floor against extinction. Spread only ever fills a cell next to a living
+    /// plant, so once greens became destructible the last plant of a kind could be
+    /// eaten and that kind would be gone for the rest of the run - quietly turning
+    /// the locked niches (bramble, blightcap) into dead content.
+    /// <para>
+    /// Deliberately rare: spread from living plants stays the normal mechanism, and
+    /// this is only the path back from zero. Soil still decides what can grow where,
+    /// so it cannot put a plant somewhere the world would not otherwise support.
+    /// </para>
+    /// </summary>
+    private void AmbientSeed(int bucket, FertilityField fertility, float sweepDt, ref Pcg32 rng)
+    {
+        for (int index = bucket; index < _kind.Length; index += BucketCount)
+        {
+            if (_kind[index] != PlantKind.None) continue;
+            if (!rng.Chance(AmbientSeedChance * sweepDt)) continue;
+
+            float soil = fertility.At(index);
+
+            // Ascending kind order, so which kind wins is reproducible.
+            foreach (var spec in PlantSpecs.Seedable)
+            {
+                if (soil < spec.MinFertility || soil > spec.MaxFertility) continue;
+
+                Plant(index, spec.Kind, spec.MaxEnergy * 0.15f);
+                break;
+            }
         }
     }
 

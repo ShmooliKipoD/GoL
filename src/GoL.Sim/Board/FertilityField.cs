@@ -17,7 +17,14 @@ namespace GoL.Sim.Board;
 /// </summary>
 public sealed class FertilityField
 {
-    private const float RegrowthRate = 0.02f;
+    /// <summary>
+    /// Logistic recovery rate. Raised from 0.02, which could not keep up with even
+    /// one plant: a cell settles at <c>ceiling - drain/RegrowthRate</c>, so at 0.02
+    /// any drain above ~0.012/s pinned the soil at zero. Measured with no creatures
+    /// at all, mean fertility fell from 0.5 to 0.02 in 4500 ticks - nothing to do
+    /// with grazing.
+    /// </summary>
+    private const float RegrowthRate = 0.08f;
 
     private readonly float[] _value;
     private readonly float[] _ceiling;
@@ -31,6 +38,9 @@ public sealed class FertilityField
         _value = new float[resolution * resolution];
         _ceiling = new float[resolution * resolution];
 
+        float perSoilCell = (float)plantResolution / resolution;
+        _drainPerCell = 1f / MathF.Max(1f, perSoilCell * perSoilCell);
+
         Seed(ref rng);
     }
 
@@ -41,10 +51,30 @@ public sealed class FertilityField
 
     public float AtCell(int x, int y) => _value[y * Resolution + x];
 
+    /// <summary>
+    /// Mean soil quality. The one number that separates a world that is merely
+    /// grazed from one whose soil is running down - from the plant count alone the
+    /// two look identical until it is too late to recover.
+    /// </summary>
+    public float Mean()
+    {
+        float total = 0f;
+        for (int i = 0; i < _value.Length; i++) total += _value[i];
+        return _value.Length == 0 ? 0f : total / _value.Length;
+    }
+
+    /// <summary>
+    /// Plant cells are finer than fertility cells, so several plants share one patch
+    /// of soil. The drain is scaled by that ratio: it is a rate per unit area, and
+    /// charging every plant cell the full amount made a fully planted soil cell
+    /// drain four times as fast as one plant ever should.
+    /// </summary>
+    private readonly float _drainPerCell;
+
     public void Drain(int plantIndex, float amount)
     {
         int i = ToOwnIndex(plantIndex);
-        _value[i] = MathF.Max(0f, _value[i] - amount);
+        _value[i] = MathF.Max(0f, _value[i] - amount * _drainPerCell);
     }
 
     /// <summary>Logistic regrowth toward each cell's own ceiling.</summary>

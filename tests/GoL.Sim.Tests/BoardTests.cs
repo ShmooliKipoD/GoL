@@ -96,14 +96,21 @@ public class BoardTests
     }
 
     [Fact]
-    public void PlantsGrowBack_AfterBeingGrazed()
+    public void PlantsGrowBack_AfterBeingPartlyGrazed()
     {
         var (world, board) = Build();
 
         int index = FindPlant(board, PlantKind.Grass);
-        board.Plants.Consume(index, board.Plants.EnergyAt(index));
+
+        // Partly, not wholly. A plant eaten to nothing is now removed rather than
+        // left in place at zero energy to refill from its roots - that behaviour
+        // left an invisible green a creature could sit on forever. Grazing still
+        // has to be survivable, though, or every nibble would destroy a plant.
+        board.Plants.Consume(index, board.Plants.EnergyAt(index) * 0.5f);
 
         float stripped = board.Plants.EnergyAt(index);
+        Assert.Equal(PlantKind.Grass, board.Plants.KindAt(index));
+
         for (int i = 0; i < 600; i++) world.Step();
 
         Assert.True(board.Plants.EnergyAt(index) > stripped, "grass never regrew");
