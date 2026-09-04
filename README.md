@@ -24,15 +24,15 @@ when the game was written.
 
 ## Status
 
-**Step 2 of 5 complete** — a creature with an evolving brain, senses, and every overlay.
+**Step 3 of 5 complete** — a populated board with plants, terrain, scent and a camera.
 
 | Step | What | State |
 |---|---|---|
 | 0 | Project skeleton, build output, content pipeline | ✅ done |
 | 1 | Game infrastructure: main menu, configuration, exit confirm | ✅ done |
 | 2 | A single creature: genome, brain, senses, energy, overlays | ✅ done |
-| 3 | The board: camera, plants and their spread, pheromones, spatial index | ⬜ next |
-| 4 | Creatures on the board: population, reproduction, evolution, stats | ⬜ |
+| 3 | The board: camera, plants and their spread, pheromones, spatial index | ✅ done |
+| 4 | Creatures on the board: population balance, evolution over long runs, stats | ⬜ next |
 
 ## Quick start (macOS)
 
@@ -68,10 +68,14 @@ dest/     build output (gitignored)
 | `tools/GoL.Headless` | Long soak runs and determinism checks, with no graphics stack |
 | `tests/GoL.Sim.Tests` | Unit tests over the core |
 
-**`GoL.Sim` never references MonoGame.** That keeps the simulation testable
-without a window, lets a 10 000-tick soak run anywhere, and keeps a graphics
-library's statics and time sources out of a system that has to be
-bit-reproducible from a seed. A unit test enforces it.
+The simulation is **entities, components and systems** (`MonoGame.Extended.ECS`),
+and **`GoL.Sim` never needs graphics to run** — no window, no graphics device, not
+even the `DYLD` variable. That keeps it testable, lets a long soak run anywhere,
+and keeps a graphics library's statics and time sources out of a system that has
+to be bit-reproducible from a seed. `tools/GoL.Headless` is the standing proof.
+
+Vegetation, soil and scent are **grids, not entities**: "prefer ECS" is not
+"everything is an entity", and dense uniform data belongs in arrays.
 
 ## Documentation
 

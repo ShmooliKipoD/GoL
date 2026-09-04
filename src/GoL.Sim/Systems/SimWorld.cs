@@ -43,8 +43,11 @@ public sealed class SimWorld
         // creation and destruction never happen mid-iteration.
         // The environment needs to find creatures, but the ECS owns them - so the
         // simulation hands it a bridge rather than the entity store.
-        if (environment.SenseField is LabEnvironment lab)
-            lab.Creatures = new EcsCreatureIndex(this);
+        switch (environment.SenseField)
+        {
+            case LabEnvironment lab: lab.Creatures = new EcsCreatureIndex(this); break;
+            case Board.BoardEnvironment board: board.Creatures = new EcsCreatureIndex(this); break;
+        }
 
         _ecs = new WorldBuilder()
             .AddSystem(new FieldSystem(this))

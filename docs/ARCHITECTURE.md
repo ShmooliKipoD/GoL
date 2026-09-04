@@ -116,10 +116,74 @@ named — see `docs/CONTROLS.md`.
 
 ## Simulation structure
 
-*(Filled in by Step 3. The world tick order and its load-bearing constraints —
-sense/think fully separated from actuate, spatial index rebuilt between all
-writes and all reads, contested resources resolved in a canonical key order —
-are documented here once implemented.)*
+The simulation is **entities, components and systems**, on
+`MonoGame.Extended.ECS`. Creatures are entities; their body, energy, vitals,
+genome, brain and eyes are components; each phase of the tick is a system.
+
+Not everything is an entity. **Vegetation, fertility and scent are grids** — the
+plant grid alone is tens of thousands of cells, and making each an entity would
+be a large regression for no gain. Dense uniform data stays in arrays.
+
+### Tick order
+
+The system registration order in `SimWorld` *is* the tick order, and it is
+load-bearing:
+
+| # | System | Why here |
+|---|---|---|
+| 1 | `FieldSystem` | Scent, fertility, plant growth, spatial index rebuild. First, so every creature perceives the same field state, and the index is rebuilt after the previous tick's movement but before this tick's sensing |
+| 2 | `SenseSystem` | Reads only |
+| 3 | `ThinkSystem` | Reads only |
+| 4 | `ActuateSystem` | **First writer.** Everything before it only read |
+| 5 | `FeedSystem` | After movement, so a creature bites from where it ended up |
+| 6 | `EnergySystem` | After feeding, so what it ate is credited before it is charged |
+| 7 | `LifecycleSystem` | Last, so entities are never created or destroyed mid-iteration |
+
+The split that matters most: **sensing and thinking both complete before anything
+acts.** If creature 0 moved before creature 1 sensed, the run would depend on the
+order the entity list happens to be in, and reproducibility from a seed would be
+gone.
+
+`LifecycleSystem` collects births and deaths into lists and applies them after its
+pass, births first — so a parent that dies this tick still leaves issue, and a
+freed entity slot cannot be handed to its own offspring (which would give the
+child its parent's random stream).
+
+### Sub-rate work
+
+Two costs are **population-independent**, so they run below tick rate:
+
+- **Scent diffusion** every 4th ticks. Emission still happens every tick; only the
+  diffuse-and-decay pass is sub-rate. At full rate this was measured as the
+  largest single cost in the simulation.
+- **Plant growth** in 16 buckets, one per tick, so a full sweep completes every 16
+  ticks at a flat cost that does not depend on how much is growing.
+
+### Performance, measured
+
+At 1024-unit world, 600 ticks, headless:
+
+| Creatures | ticks/s |
+|---|---|
+| 20 | 600 |
+| 80 | 474 |
+| 200 | 219 |
+| 500 | 107 |
+
+Real time needs 60. Two bottlenecks were found and fixed by measurement, not
+guesswork:
+
+1. **Vision gathering every plant in range.** Sweeping the square enclosing eye
+   range is ~1200 cells per creature per tick, and it dominated everything.
+   Replaced with a **DDA ray march, one ray per vision bin** — cost now depends on
+   how far the ray travels, not the area it could have covered, and it yields
+   nearest-hit-per-bin and occlusion for free. Creatures still come from the
+   spatial hash, since there are few of them and their angular width matters.
+2. **Scent diffusion calling a wrapping helper for every neighbour.** The modulo
+   arithmetic, run tens of thousands of times per pass for a wrap that only applies
+   on the boundary, became the dominant fixed cost once vision was fixed. Split
+   into an interior fast path and an edge path, and the buffers are swapped rather
+   than copied.
 
 ## Determinism
 

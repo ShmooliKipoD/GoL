@@ -257,3 +257,118 @@ panel listing acquired traits.
 upkeep, so it is usually worse than its parent and gets selected straight back out.
 This is the most likely reason the headline feature could appear not to work once
 populations run in Step 4. Mitigations, in escalation order, are in `docs/GENOME.md`.
+
+---
+
+## 4. Step 3a — The simulation on ECS
+
+**Problem.** The owner asked for ECS. The simulation was a `Creature` class with
+fields and a hand-rolled loop, and the core carried a rule that it must never
+reference MonoGame — which appeared to rule out `MonoGame.Extended.ECS`.
+
+**Approach.** Test the assumption rather than argue from it. Four experiments,
+each recorded in `CLAUDE.md`:
+
+1. Extended's ECS **runs fully headless** — no `GraphicsDevice`, no window, no
+   `DYLD` variable. Referencing `MonoGame.Framework` does not force graphics
+   initialisation, so the objection was unfounded.
+2. `world.Update()` **allocates zero bytes** per tick once warmed.
+3. `ActiveEntities` iterates by **ascending entity id**, not insertion order.
+   Proven by destroying low ids and recreating: the replacements came back as ids
+   `1, 0` from a LIFO free list yet still iterated `0,1,2,3,4,5`. This is what
+   makes a seeded run reproducible, and it is undocumented upstream.
+4. **Components must be reference types** — `ComponentMapper<T>` constrains
+   `T : class` — so births allocate. Bounded and asserted at under 4 KB/tick.
+
+The first ordering test was inconclusive: both runs matched only because id
+recycling happened to hand back the same ids, which any iteration scheme would
+satisfy. Redone with low-id churn so insertion order and id order actually differ.
+
+The rule was **restated, not relaxed**: not "never references MonoGame" but
+"never *needs* graphics to run". `tools/GoL.Headless` is the standing proof — it
+references only `GoL.Sim` and is run without the `DYLD` variable.
+
+**Verification.** The 65 existing tests were the oracle. All the behavioural ones
+passed unchanged; the single failure was the architecture test asserting the rule
+this change deliberately replaced.
+
+**Caught in review of my own design:** `SenseSystem` and `ThinkSystem` would have
+shared one scratch buffer, leaving only the last creature's readings by the time
+thinking began. Sensor and effector vectors now live on the `Mind` component.
+
+**Scene graphs were considered and rejected on fact:** `SceneGraph`, `SceneNode`
+and `SpriteEntity` are documented on monogameextended.net but **do not exist in
+MonoGame.Extended 4.0.0** — verified against the shipped assembly.
+
+**Files:** `src/GoL.Sim/Components/`, `src/GoL.Sim/Systems/`,
+`src/GoL.Sim/Core/{SenseSubject,CreatureView,IEnvironment,LabEnvironment}.cs`,
+`src/GoL.Sim/GlobalUsings.cs`, `tools/GoL.Headless/Program.cs`,
+`tests/GoL.Sim.Tests/{Architecture,Determinism}Tests.cs`.
+
+**Gotcha found.** Referencing MonoGame made `Vector2` ambiguous in the core. A
+global using alias pins it to `System.Numerics`, so the ambiguity can never be
+resolved the wrong way by accident.
+
+---
+
+## 5. Step 3b — The board
+
+**Problem.** The spec asks for a camera that zooms and pans, and for a board that
+generates greens — noting explicitly that the types and how they spread needed
+thought.
+
+**Approach.**
+
+- **Four kinds, each with a job.** Grass is the staple. Fruit is scarce, rich and
+  grows only on good soil. **Bramble is the locked niche** — it colonises exhausted
+  ground nothing else will take, and is edible only with a `CelluloseGut`, so a
+  population that never unlocks that attribute watches bramble take the map.
+  Blightcap is high-energy and poisonous without `ToxinResistance`, and grows only
+  on poor soil, so it rewards going where food is scarce. Carrion makes `Carnivory`
+  pay off before a lineage can reliably hunt.
+- **Fertility from value noise**, drained by plants and regrowing logistically.
+  Without non-uniform terrain there is nowhere worth travelling to, and spatial
+  strategy cannot evolve because there is no space worth strategising about.
+- **Spread** is per-cell: a mature plant seeds one of eight neighbours, if that
+  cell is empty and the soil suits its kind. Seedlings start small and must mature
+  before spreading on.
+- **Camera** is hand-rolled rather than Extended's `OrthographicCamera`, for one
+  reason: this world wraps, and following a creature across the seam needs the view
+  to move continuously rather than jump the width of the map.
+
+**Performance was the real work here.** The first board ran at 175 ticks/s against
+the lab's 1661. Rather than guess, cost was measured against creature count, which
+showed it scaling linearly — a per-creature cost. Two fixes, in order:
+
+1. **Vision was gathering every plant in range** — a ~1200-cell square sweep per
+   creature per tick. Replaced with a DDA ray march, one ray per vision bin. Cost
+   now tracks how far the ray travels, and nearest-hit-per-bin and occlusion come
+   for free.
+2. That exposed a large **fixed** cost: scent diffusion calling a wrapping helper
+   for all four neighbours of every cell. Split into an interior fast path and an
+   edge path, with buffer swapping instead of copying.
+
+Result at 500 creatures: **107 ticks/s**, against the 60 real time needs.
+
+**Appearance**, chosen by the owner: each plant kind gets its own colour *and*
+silhouette, with radius tracking remaining energy so a grazed patch visibly thins.
+Colour alone was rejected because grass and bramble are both green — and those two
+are exactly the pair that must be distinguishable. Soil and scent got separate
+keys (`G`, `H`) rather than one combined overlay, since they answer different
+questions and two translucent layers muddy each other.
+
+**Verified.** 83 tests. New ones cover the locked niche (bramble worthless without
+the gut, food with it), toxin resistance, carrion digestion, regrowth after
+grazing, colonisation of empty ground over 4000 ticks, scent diffusing and
+decaying, spatial-hash results arriving in id order and wrapping across the seam,
+and the ray march stopping at the nearest plant rather than the far one.
+
+**Not yet verified: the board's appearance.** The display was asleep for the whole
+of this step and `screencapture` could not produce an image. The board was run for
+12 s with `GOL_OVERLAYS=all`, which exercises every draw path including plants,
+fertility, scent, the inspector and the brain graph, with no exception — but
+nobody has looked at it. Worth a glance before Step 4 builds on it.
+
+**Files:** `src/GoL.Sim/Board/{SpatialHash,Plants,PlantGrid,FertilityField,PheromoneField,BoardEnvironment}.cs`,
+`src/GoL.Render/{BoardRenderer,BoardCamera}.cs`,
+`src/GoL.App/Screens/BoardScreen.cs`, `tests/GoL.Sim.Tests/BoardTests.cs`.

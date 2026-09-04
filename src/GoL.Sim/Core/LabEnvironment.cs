@@ -135,8 +135,45 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
             results[count++] = new Percept(plant.Position, plant.Radius, SeenKind.Plant, 0f, plant.Id);
         }
 
-        count += Creatures.Query(centre, radius, excludeCreatureId, results[count..]);
+        count += QueryCreatures(centre, radius, excludeCreatureId, results[count..]);
         return count;
+    }
+
+    public int QueryCreatures(Vector2 centre, float radius, int excludeId, Span<Percept> results)
+        => Creatures.Query(centre, radius, excludeId, results);
+
+    /// <summary>Brute force over a dozen plants. The board's grid march is what this
+    /// stands in for; at this scale the difference does not matter.</summary>
+    public int RayCastPlant(
+        Vector2 origin, Vector2 direction, float maxDistance,
+        out float distance, out float radius)
+    {
+        distance = maxDistance;
+        radius = 0f;
+        int hit = -1;
+
+        foreach (var plant in _plants)
+        {
+            if (!plant.Alive) continue;
+
+            var offset = Offset(origin, plant.Position);
+            float along = offset.X * direction.X + offset.Y * direction.Y;
+            if (along <= 0f || along > maxDistance) continue;
+
+            // Perpendicular distance from the plant's centre to the ray.
+            float perpX = offset.X - direction.X * along;
+            float perpY = offset.Y - direction.Y * along;
+            if (perpX * perpX + perpY * perpY > plant.Radius * plant.Radius) continue;
+
+            if (along < distance)
+            {
+                distance = along;
+                radius = plant.Radius;
+                hit = plant.Id;
+            }
+        }
+
+        return hit;
     }
 
     /// <summary>How creatures are found. Set by the simulation at start-up, because

@@ -44,25 +44,26 @@ is; the difference is deliberate.
 | `R` | Reset with a fresh creature |
 | `Esc` | Back to the menu |
 
-## Camera
-
-*(Step 3 — the full board camera. The lab has its own simpler zoom, above.)*
+## The board
 
 | Input | Action |
 |---|---|
-| Mouse wheel, `+` / `-` | Zoom toward the cursor |
-| Arrows / `WASD`, middle-drag | Pan |
-| Left click | Select a creature and pin its overlays to it |
-
-## Simulation speed
-
-*(Step 4.)*
-
-| Key | Action |
-|---|---|
+| Mouse wheel | Zoom **toward the cursor** — not the screen centre, or what you aim at slides away as you zoom in |
+| `+` / `-` | Zoom about the centre |
+| Arrows / `WASD`, middle-drag | Pan. Speed scales with zoom, so a pan covers the same amount of screen however far in you are |
+| Left click | Select a creature and pin the inspector to it |
+| `F` | Follow the selection. Wrap-aware, so following across the world seam does not whip the camera across the map |
+| `V` `N` `M` `B` `A` | The same inspector overlays as the lab, on the selected creature |
+| `G` | Soil fertility, drawn beneath everything |
+| `H` | Scent, tinted per channel |
+| `F1` | All overlays on/off |
 | `Space` | Pause / resume |
 | `.` | Step one tick while paused |
 | `1` / `2` / `3` | Run at 1x / 4x / 16x |
+| `Esc` | Back to the menu |
+
+Soil and scent are on **separate keys** deliberately: they answer different
+questions, and stacking both translucent layers muddies each of them.
 
 ## Development
 
@@ -73,6 +74,8 @@ scripted. These environment variables are how a screen gets looked at directly.
 |---|---|
 | `GOL_SCREEN=config` | Start on the configuration screen |
 | `GOL_SCREEN=lab` | Start in the Creature Lab |
+| `GOL_SCREEN=board` | Start on the populated board |
 | `GOL_LAB_TRAITS=n` | Give the lab's creature `n` unlocked attributes at birth |
+| `GOL_OVERLAYS=all` | Start with every overlay on, and something selected |
 
 Unrecognised `GOL_SCREEN` values fall back to the main menu.

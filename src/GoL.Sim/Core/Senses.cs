@@ -120,8 +120,11 @@ public sealed class Senses
         }
 
         float reach = MathF.Max(forward.Range, rear?.Range ?? 0f);
-        int count = QueryAll(field, creature.Position, reach, creature.Id);
 
+        // Creatures come from the spatial index: there are few of them, and a
+        // creature's angular width matters, so each is placed into every bin it
+        // visually covers.
+        int count = QueryCreaturesOnly(field, creature.Position, reach, creature.Id);
         for (int i = 0; i < count; i++)
         {
             ref readonly var p = ref _percepts[i];
@@ -131,6 +134,27 @@ public sealed class Senses
 
             CastInto(forward, creature.Body.Heading, offset, distance, p);
             if (rear is not null) CastInto(rear, creature.Body.Heading, offset, distance, p);
+        }
+
+        // Vegetation is a dense grid, so it is ray-marched one ray per bin rather
+        // than gathered. Sweeping the square enclosing eye range was measured as the
+        // simulation's dominant cost; marching costs what the ray actually travels.
+        CastPlantRays(forward, creature.Body.Heading, creature.Position, field);
+        if (rear is not null) CastPlantRays(rear, creature.Body.Heading, creature.Position, field);
+    }
+
+    /// <summary>One ray per vision bin. The march stops at the first plant, so
+    /// occlusion falls out for free.</summary>
+    private static void CastPlantRays(Eye eye, float bodyHeading, Vector2 origin, ISenseField field)
+    {
+        for (int bin = 0; bin < eye.BinCount; bin++)
+        {
+            var direction = eye.BinDirection(bodyHeading, bin);
+
+            int hit = field.RayCastPlant(origin, direction, eye.Range, out float distance, out float radius);
+            if (hit < 0) continue;
+
+            eye.Report(bin, MathF.Max(0f, distance - radius), SeenKind.Plant, 0f);
         }
     }
 
@@ -276,6 +300,17 @@ public sealed class Senses
             if (count < _percepts.Length) return count;
 
             // Truncation would silently blind the creature to whatever sorted last.
+            _percepts = new Percept[_percepts.Length * 2];
+        }
+    }
+
+    private int QueryCreaturesOnly(ISenseField field, Vector2 centre, float radius, int excludeId)
+    {
+        while (true)
+        {
+            int count = field.QueryCreatures(centre, radius, excludeId, _percepts);
+            if (count < _percepts.Length) return count;
+
             _percepts = new Percept[_percepts.Length * 2];
         }
     }

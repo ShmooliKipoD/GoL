@@ -40,6 +40,25 @@ public interface ISenseField
     /// keeps float accumulation over them reproducible.</summary>
     int Query(Vector2 centre, float radius, int excludeCreatureId, Span<Percept> results);
 
+    /// <summary>Creatures only, without sweeping the vegetation grid.</summary>
+    int QueryCreatures(Vector2 centre, float radius, int excludeCreatureId, Span<Percept> results);
+
+    /// <summary>
+    /// Marches the vegetation grid along a ray and reports the first plant hit.
+    /// <para>
+    /// This exists for performance, and the difference is not marginal. Gathering
+    /// every plant within eye range means sweeping the square that encloses it -
+    /// roughly 1200 cells per creature per tick at a 130-unit range - and that scan
+    /// was measured as the simulation's dominant cost. A ray per vision bin visits
+    /// on the order of sixteen cells instead, and yields nearest-hit-per-bin and
+    /// occlusion for free, which is exactly what the eye needs anyway.
+    /// </para>
+    /// </summary>
+    /// <returns>The plant's cell index, or -1 if the ray hits nothing.</returns>
+    int RayCastPlant(
+        Vector2 origin, Vector2 direction, float maxDistance,
+        out float distance, out float radius);
+
     /// <summary>Pheromone strength on a channel at a point, 0..1.</summary>
     float SampleScent(Vector2 position, int channel);
 

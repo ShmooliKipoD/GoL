@@ -20,6 +20,7 @@ public sealed class MainMenuScreen : GolScreen
 
         _menu = new MenuList(new[]
         {
+            new MenuEntry("New Game", () => Gol.ShowScreen(new BoardScreen(Gol))),
             new MenuEntry("Creature Lab", OnNewGame),
             new MenuEntry("Configuration", () => Gol.ShowScreen(new ConfigScreen(Gol))),
             new MenuEntry("Exit", _exitPrompt.Open),
@@ -28,7 +29,6 @@ public sealed class MainMenuScreen : GolScreen
 
     private void OnNewGame()
     {
-        // Step 4 replaces this with the full world; for now it opens the lab.
         Gol.ShowScreen(new CreatureLabScreen(Gol));
     }
 

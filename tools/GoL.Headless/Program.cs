@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using GoL.Sim;
+using GoL.Sim.Board;
 using GoL.Sim.Core;
 using GoL.Sim.Genetics;
 using GoL.Sim.Systems;
@@ -16,24 +17,46 @@ using GoL.Sim.Systems;
 int ticks = ArgInt(args, "--ticks", 6000);
 int seed = ArgInt(args, "--seed", 42);
 int creatures = ArgInt(args, "--creatures", 40);
-int plants = ArgInt(args, "--plants", 60);
+bool lab = Array.IndexOf(args, "--lab") >= 0;
 
-var config = new SimConfig { Seed = seed, WorldSize = 340f, TicksPerSecond = 60 };
-var environment = new LabEnvironment(config);
+var config = new SimConfig
+{
+    Seed = seed,
+    WorldSize = lab ? 340f : 1024f,
+    TicksPerSecond = 60,
+    PlantDensity = 0.18f,
+};
+
+IEnvironment environment;
+float worldSize;
+
+if (lab)
+{
+    var labEnv = new LabEnvironment(config);
+    labEnv.SeedPlants(ArgInt(args, "--plants", 60));
+    environment = labEnv;
+    worldSize = labEnv.WorldSize;
+}
+else
+{
+    var board = new BoardEnvironment(config);
+    environment = board;
+    worldSize = board.WorldSize;
+}
+
 var world = new SimWorld(config, environment);
-
-environment.SeedPlants(plants);
 
 var rng = new Pcg32((ulong)seed, StreamId.World);
 for (int i = 0; i < creatures; i++)
 {
     world.Spawn(
         Genome.CreateSeed(ref rng),
-        new Vector2(rng.NextFloat(0f, environment.WorldSize), rng.NextFloat(0f, environment.WorldSize)),
+        new Vector2(rng.NextFloat(0f, worldSize), rng.NextFloat(0f, worldSize)),
         rng.NextFloat(0f, MathF.Tau));
 }
 
-Console.WriteLine($"seed {seed}  {creatures} creatures  {plants} plants  {ticks} ticks");
+Console.WriteLine($"{(lab ? "lab" : "board")}  seed {seed}  {creatures} creatures  "
+    + $"world {worldSize:F0}  {ticks} ticks");
 Console.WriteLine($"{"tick",8} {"pop",6} {"gen",5} {"mean E",9}  attributes");
 
 var stopwatch = Stopwatch.StartNew();

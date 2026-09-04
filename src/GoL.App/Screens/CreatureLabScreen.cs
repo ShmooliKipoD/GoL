@@ -149,7 +149,7 @@ public sealed class CreatureLabScreen : GolScreen
         if (kb.WasKeyPressed(Keys.M)) _overlays = _overlays.Toggle(OverlayFlags.Mouth);
         if (kb.WasKeyPressed(Keys.B)) _overlays = _overlays.Toggle(OverlayFlags.Brain);
         if (kb.WasKeyPressed(Keys.A)) _overlays = _overlays.Toggle(OverlayFlags.Attributes);
-        if (kb.WasKeyPressed(Keys.G)) _overlays = _overlays.Toggle(OverlayFlags.Field);
+        if (kb.WasKeyPressed(Keys.G)) _overlays = _overlays.Toggle(OverlayFlags.Pheromone);
 
         if (kb.WasKeyPressed(Keys.F1))
             _overlays = _overlays == OverlayFlags.All ? OverlayFlags.None : OverlayFlags.All;
@@ -184,7 +184,7 @@ public sealed class CreatureLabScreen : GolScreen
             * Matrix.CreateTranslation(offset.X, offset.Y, 0f));
 
         DrawArena();
-        if (_overlays.Has(OverlayFlags.Field)) DrawScentField();
+        if (_overlays.Has(OverlayFlags.Pheromone)) DrawScentField();
         DrawPlants();
 
         var subject = Subject;

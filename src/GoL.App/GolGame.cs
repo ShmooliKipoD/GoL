@@ -68,6 +68,7 @@ public sealed class GolGame : Game
         {
             "config" => new ConfigScreen(this),
             "lab" => new CreatureLabScreen(this),
+            "board" => new BoardScreen(this),
             _ => new MainMenuScreen(this),
         };
 

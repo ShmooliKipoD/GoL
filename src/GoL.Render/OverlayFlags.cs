@@ -16,9 +16,17 @@ public enum OverlayFlags
     Mouth = 1 << 2,
     Brain = 1 << 3,
     Attributes = 1 << 4,
-    Field = 1 << 5,
 
-    All = Vision | Smell | Mouth | Brain | Attributes | Field,
+    /// <summary>Soil quality under everything - what explains where each kind of
+    /// plant grows and why creatures migrate.</summary>
+    Fertility = 1 << 5,
+
+    /// <summary>Scent laid by creatures. Separate from fertility because the two
+    /// answer different questions and stacking both translucent layers muddies
+    /// each of them.</summary>
+    Pheromone = 1 << 6,
+
+    All = Vision | Smell | Mouth | Brain | Attributes | Fertility | Pheromone,
 }
 
 public static class OverlayFlagsExtensions
