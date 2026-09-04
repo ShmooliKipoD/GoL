@@ -39,7 +39,7 @@ public sealed class CreatureLabScreen : GolScreen
     private readonly InspectorRenderer _inspector = new();
 
     private int _subjectId;
-    private OverlayFlags _overlays = OverlayFlags.Vision | OverlayFlags.Attributes;
+    private OverlayFlags _overlays = OverlayFlags.Vision | OverlayFlags.Attributes | OverlayFlags.Actions;
     private bool _paused;
     private float _accumulator;
 
@@ -150,6 +150,7 @@ public sealed class CreatureLabScreen : GolScreen
         if (kb.WasKeyPressed(Keys.B)) _overlays = _overlays.Toggle(OverlayFlags.Brain);
         if (kb.WasKeyPressed(Keys.A)) _overlays = _overlays.Toggle(OverlayFlags.Attributes);
         if (kb.WasKeyPressed(Keys.G)) _overlays = _overlays.Toggle(OverlayFlags.Pheromone);
+        if (kb.WasKeyPressed(Keys.K)) _overlays = _overlays.Toggle(OverlayFlags.Actions);
 
         if (kb.WasKeyPressed(Keys.F1))
             _overlays = _overlays == OverlayFlags.All ? OverlayFlags.None : OverlayFlags.All;
@@ -195,6 +196,18 @@ public sealed class CreatureLabScreen : GolScreen
 
         BeginUi();
         DrawPanels();
+
+        // Screen space, so it is projected by hand: the lab has no BoardCamera and
+        // draws the world through the plain scale-and-offset matrix above.
+        if (_overlays.Has(OverlayFlags.Actions))
+        {
+            var head = new XnaVector2(
+                subject.Position.X * scale + offset.X,
+                subject.Position.Y * scale + offset.Y - subject.Radius * scale - 6f);
+
+            InspectorRenderer.DrawActionLabel(Batch, Text, subject, head);
+        }
+
         DrawHelp();
         EndUi();
     }
@@ -266,12 +279,19 @@ public sealed class CreatureLabScreen : GolScreen
             _inspector.DrawBrain(Batch, Text, Subject,
                 new RectangleF(ViewWidth - width - 12f, 12f, width, height));
         }
+
+        if (_overlays.Has(OverlayFlags.Actions))
+        {
+            // Below the brain panel when both are up, so neither is hidden.
+            float y = _overlays.Has(OverlayFlags.Brain) ? 284f : 12f;
+            _inspector.DrawActions(Batch, Text, Subject, new XnaVector2(ViewWidth - 312f, y));
+        }
     }
 
     private void DrawHelp()
     {
         string state = _paused ? "PAUSED" : "running";
-        string line1 = "V vision   N smell   M mouth   B brain   A attributes   G scent   F1 all";
+        string line1 = "V vision   N smell   M mouth   B brain   A attributes   K actions   G scent   F1 all";
         string line2 = $"U new attribute   Space pause ({state})   . step   +/- zoom   F follow   R reset   Esc menu";
 
         float lineHeight = Text.LineHeight(2f);

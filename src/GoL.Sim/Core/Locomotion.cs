@@ -13,6 +13,7 @@ public struct Intent
     public bool Bite;
     public bool Reproduce;
     public bool Sprint;
+    public bool Torpor;
     public float EmitScent0;
     public float EmitScent1;
 }
@@ -46,6 +47,12 @@ public static class Locomotion
             intent.Sprint = Read(effectors, layout.EffectorIndexOf(NodeIds.Effector(slot, 0))) > 0.5f;
         }
 
+        if (genome.Has(LatentTraitId.Torpor))
+        {
+            int slot = LatentTraitCatalog.Get(LatentTraitId.Torpor).Slot;
+            intent.Torpor = Read(effectors, layout.EffectorIndexOf(NodeIds.Effector(slot, 0))) > 0.5f;
+        }
+
         if (genome.Has(LatentTraitId.ScentGlandA))
         {
             int slot = LatentTraitCatalog.Get(LatentTraitId.ScentGlandA).Slot;
@@ -67,6 +74,15 @@ public static class Locomotion
     {
         float maxSpeed = Metabolism.EffectiveMaxSpeed(genome, intent.Sprint);
         float thrust = Math.Clamp(intent.Thrust, -1f, 1f);
+        float turn = Math.Clamp(intent.Turn, -1f, 1f);
+
+        // Torpor damps the controller's own outputs rather than capping the body,
+        // so resting costs manoeuvrability at exactly the moment it saves energy.
+        if (intent.Torpor)
+        {
+            thrust *= Metabolism.TorporMoveFactor;
+            turn *= Metabolism.TorporMoveFactor;
+        }
 
         // Reverse is slower than forward - a creature that backs away as fast as it
         // charges makes fleeing and pursuing the same manoeuvre.
@@ -80,7 +96,7 @@ public static class Locomotion
         body.Speed += (target - body.Speed) * MathF.Min(1f, responsiveness * dt);
 
         float turnRate = genome.Trait(TraitAxis.TurnRate);
-        body.AngularVelocity = Math.Clamp(intent.Turn, -1f, 1f) * turnRate;
+        body.AngularVelocity = turn * turnRate;
         body.Heading = Senses.WrapAngle(body.Heading + body.AngularVelocity * dt);
 
         body.Position = field.Wrap(body.Position + body.Forward * (body.Speed * dt));
@@ -91,10 +107,10 @@ public static class Locomotion
     /// <summary>Charges upkeep, ages the creature, and drains any toxin load.</summary>
     public static void Tick(
         Body body, Energy energy, Vitals vitals, Genome genome, Brains.Brain brain,
-        float baseRate, float dt)
+        float baseRate, float dt, bool torpid = false)
     {
         vitals.Age += dt;
-        energy.Current -= Metabolism.BaseCost(body, genome, brain, vitals, baseRate) * dt;
+        energy.Current -= Metabolism.BaseCost(body, genome, brain, vitals, baseRate, torpid) * dt;
 
         if (vitals.ToxinLoad > 0f)
         {

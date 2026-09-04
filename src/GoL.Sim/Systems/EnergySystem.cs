@@ -43,9 +43,11 @@ public sealed class EnergySystem : SimSystem
             var vitals = _vitals.Get(id);
             if (!vitals.Alive) continue;
 
+            var mind = _mind.Get(id);
+
             Locomotion.Tick(
                 _body.Get(id), _energy.Get(id), vitals,
-                _genes.Get(id).Genome, _mind.Get(id).Brain, baseRate, dt);
+                _genes.Get(id).Genome, mind.Brain, baseRate, dt, mind.Intent.Torpor);
         }
     }
 }

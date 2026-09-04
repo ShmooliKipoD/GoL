@@ -20,7 +20,8 @@ namespace GoL.Sim.Core;
 public readonly struct CreatureView
 {
     public CreatureView(
-        int id, Body body, Energy energy, Vitals vitals, Genes genes, Mind mind, Sight sight)
+        int id, Body body, Energy energy, Vitals vitals, Genes genes, Mind mind, Sight sight,
+        Behaviour behaviour)
     {
         Id = id;
         Body = body;
@@ -29,6 +30,7 @@ public readonly struct CreatureView
         Genes = genes;
         Mind = mind;
         Sight = sight;
+        Behaviour = behaviour;
     }
 
     public int Id { get; }
@@ -38,6 +40,7 @@ public readonly struct CreatureView
     public Genes Genes { get; }
     public Mind Mind { get; }
     public Sight Sight { get; }
+    public Behaviour Behaviour { get; }
 
     public Genome Genome => Genes.Genome;
     public Vector2 Position => Body.Position;
@@ -52,6 +55,10 @@ public readonly struct CreatureView
 
     public Intent LastIntent => Mind.Intent;
     public bool BitThisTick => Mind.BitThisTick;
+
+    /// <summary>What this creature is doing, as a name. "Idle" when nothing clears
+    /// the deadband.</summary>
+    public string ActionLabel => Behaviour.Label();
 
     public Vector2 Forward => Body.Forward;
     public Vector2 NosePosition => Body.Position + Body.Forward * Body.Radius;

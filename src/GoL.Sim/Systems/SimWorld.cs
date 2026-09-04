@@ -57,6 +57,7 @@ public sealed class SimWorld
             .AddSystem(new FeedSystem(this))
             .AddSystem(new EnergySystem(this))
             .AddSystem(new LifecycleSystem(this))
+            .AddSystem(new ActionSystem(this))
             .Build();
     }
 
@@ -109,6 +110,7 @@ public sealed class SimWorld
         entity.Attach(new Genes { Genome = genome });
         entity.Attach(mind);
         entity.Attach(new Sight { Forward = new Eye(Vision.BinCount) });
+        entity.Attach(new Behaviour { AvailableMask = Actions.AvailableMask(genome) });
         entity.Attach(new RandomSource((ulong)Config.Seed, id, Tick));
 
         RecordUnlocks(genome);
@@ -125,6 +127,7 @@ public sealed class SimWorld
         float share = energy.Current * Metabolism.OffspringShare;
         energy.Current *= 1f - Metabolism.OffspringShare - Metabolism.BirthOverhead;
         vitals.LastBirthTime = SimTime;
+        vitals.LastBirthTick = Tick;
 
         // Placed behind the parent so a newborn is not immediately inside it.
         float childRadius = childGenome.Trait(TraitAxis.BodyRadius);
@@ -181,7 +184,8 @@ public sealed class SimWorld
         return new CreatureView(
             id,
             entity.Get<Body>(), entity.Get<Energy>(), entity.Get<Vitals>(),
-            entity.Get<Genes>(), entity.Get<Mind>(), entity.Get<Sight>());
+            entity.Get<Genes>(), entity.Get<Mind>(), entity.Get<Sight>(),
+            entity.Get<Behaviour>());
     }
 
     /// <summary>Random draws that belong to the world rather than to a creature -

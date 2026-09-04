@@ -26,7 +26,10 @@ public enum OverlayFlags
     /// each of them.</summary>
     Pheromone = 1 << 6,
 
-    All = Vision | Smell | Mouth | Brain | Attributes | Fertility | Pheromone,
+    /// <summary>Every action this creature can take, and which it is taking now.</summary>
+    Actions = 1 << 7,
+
+    All = Vision | Smell | Mouth | Brain | Attributes | Fertility | Pheromone | Actions,
 }
 
 public static class OverlayFlagsExtensions

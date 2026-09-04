@@ -41,6 +41,14 @@ public sealed class BoardScreen : GolScreen
             ? OverlayFlags.All
             : OverlayFlags.None;
 
+    /// <summary>Keep the inspector pinned to <i>something</i> living. Set only by
+    /// GOL_OVERLAYS, so the panels can be exercised without a human clicking - and
+    /// deliberately not on during normal play, where silently jumping to a new
+    /// creature when yours dies would be surprising.</summary>
+    private readonly bool _autoSelect =
+        string.Equals(Environment.GetEnvironmentVariable("GOL_OVERLAYS"), "all",
+            StringComparison.OrdinalIgnoreCase);
+
     private int _selectedId = -1;
     private bool _follow;
     private bool _paused;
@@ -52,11 +60,6 @@ public sealed class BoardScreen : GolScreen
         _board = new BoardEnvironment(Gol.Config);
         _world = new SimWorld(Gol.Config, _board);
         Populate();
-
-        // With overlays forced on, pin the inspector to something so the attribute
-        // and brain panels actually draw.
-        if (_overlays != OverlayFlags.None && _world.Living.Count > 0)
-            _selectedId = _world.Living[0];
     }
 
     private void Populate()
@@ -102,6 +105,13 @@ public sealed class BoardScreen : GolScreen
 
         StepSimulation(frameTime);
 
+        // Has to wait for the first step: Living is published by LifecycleSystem,
+        // so it is still empty in the constructor - which is why the equivalent
+        // check there never selected anything. Re-pins when the subject dies, or
+        // the panels would disappear for good the first time one starved.
+        if (_autoSelect && (_selectedId < 0 || !IsAlive(_selectedId)) && _world.Living.Count > 0)
+            _selectedId = _world.Living[0];
+
         if (_follow && _selectedId >= 0 && IsAlive(_selectedId))
             _camera.FollowWrapped(ToXna(_world.Get<Body>(_selectedId).Position), 0.12f);
     }
@@ -136,6 +146,7 @@ public sealed class BoardScreen : GolScreen
         if (kb.WasKeyPressed(Keys.A)) _overlays = _overlays.Toggle(OverlayFlags.Attributes);
         if (kb.WasKeyPressed(Keys.G)) _overlays = _overlays.Toggle(OverlayFlags.Fertility);
         if (kb.WasKeyPressed(Keys.H)) _overlays = _overlays.Toggle(OverlayFlags.Pheromone);
+        if (kb.WasKeyPressed(Keys.K)) _overlays = _overlays.Toggle(OverlayFlags.Actions);
 
         if (kb.WasKeyPressed(Keys.F1))
             _overlays = _overlays == OverlayFlags.All ? OverlayFlags.None : OverlayFlags.All;
@@ -219,7 +230,7 @@ public sealed class BoardScreen : GolScreen
         }
 
         _selectedId = best;
-        if (best >= 0) _overlays |= OverlayFlags.Attributes;
+        if (best >= 0) _overlays |= OverlayFlags.Attributes | OverlayFlags.Actions;
     }
 
     private bool IsAlive(int id) => _world.Living.Contains(id);
@@ -291,6 +302,21 @@ public sealed class BoardScreen : GolScreen
             _inspector.DrawBrain(Batch, Text, creature,
                 new RectangleF(ViewWidth - width - 12f, 12f, width, height));
         }
+
+        if (_overlays.Has(OverlayFlags.Actions))
+        {
+            // Below the brain panel when both are up, so neither is hidden.
+            float y = _overlays.Has(OverlayFlags.Brain) ? 284f : 12f;
+            _inspector.DrawActions(Batch, Text, creature, new XnaVector2(ViewWidth - 312f, y));
+
+            // Screen space: the label must not scale with zoom, or it is unreadable
+            // at both ends of the range. The camera does the projection here; the
+            // lab, which has no camera, projects by hand.
+            var head = _camera.WorldToScreen(ToXna(creature.Position));
+            head.Y -= creature.Radius * _camera.Zoom + 6f;
+
+            InspectorRenderer.DrawActionLabel(Batch, Text, creature, head);
+        }
     }
 
     private void DrawHud()
@@ -316,7 +342,7 @@ public sealed class BoardScreen : GolScreen
         Text.DrawCentered(stats, ViewCenter.X, y, Palette.Ink, 2f);
         Text.DrawCentered(unlocks, ViewCenter.X, y + lineHeight, Palette.Warning, 2f);
         Text.DrawCentered(
-            "click select   V N M B A overlays   G soil   H scent   1/2/3 speed   F follow   Esc menu",
+            "click select   V N M B A overlays   K actions   G soil   H scent   1/2/3 speed   F follow   Esc menu",
             ViewCenter.X, y + lineHeight * 2f, Palette.InkDim, 2f);
     }
 

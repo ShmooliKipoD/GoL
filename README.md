@@ -24,7 +24,8 @@ when the game was written.
 
 ## Status
 
-**Step 3 of 5 complete** — a populated board with plants, terrain, scent and a camera.
+**Step 3 of 5 complete** — a populated board with plants, terrain, scent and a camera,
+and a readout of every action a creature can take.
 
 | Step | What | State |
 |---|---|---|
@@ -32,6 +33,7 @@ when the game was written.
 | 1 | Game infrastructure: main menu, configuration, exit confirm | ✅ done |
 | 2 | A single creature: genome, brain, senses, energy, overlays | ✅ done |
 | 3 | The board: camera, plants and their spread, pheromones, spatial index | ✅ done |
+| 3c | Creature actions: the full action list, what it is doing now, and Torpor | ✅ done |
 | 4 | Creatures on the board: population balance, evolution over long runs, stats | ⬜ next |
 
 ## Quick start (macOS)

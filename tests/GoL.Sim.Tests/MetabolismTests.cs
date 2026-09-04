@@ -68,6 +68,117 @@ public class MetabolismTests
             "a free attribute is never selected against, so all lineages would collect every one");
     }
 
+    // --- Torpor ---
+    //
+    // Three tests, one per cost. Torpor is the only action that saves energy, so if
+    // any one of its costs quietly stops applying it becomes free rest and every
+    // lineage that unlocks it sleeps forever. Each is pinned separately so a
+    // regression names which half of the trade broke.
+
+    [Fact]
+    public void Torpor_CutsTheRunningCost()
+    {
+        var (_, creature) = Make(configure: g =>
+        {
+            var rng = new Pcg32(2);
+            Mutator.Unlock(g, LatentTraitId.Torpor, ref rng);
+        });
+
+        float awake = Metabolism.BaseCost(
+            creature.Body, creature.Genome, creature.Mind.Brain, creature.Vitals, 0.35f);
+        float torpid = Metabolism.BaseCost(
+            creature.Body, creature.Genome, creature.Mind.Brain, creature.Vitals, 0.35f,
+            torpid: true);
+
+        Assert.True(torpid < awake, "torpor must actually save energy, or nothing would use it");
+    }
+
+    /// <summary>Trait upkeep is charged in full even while resting. An attribute
+    /// that paid for itself whenever it was used could never be selected against.
+    /// </summary>
+    [Fact]
+    public void Torpor_DoesNotDiscountItsOwnUpkeep()
+    {
+        var (_, creature) = Make(configure: g =>
+        {
+            var rng = new Pcg32(2);
+            Mutator.Unlock(g, LatentTraitId.Torpor, ref rng);
+        });
+
+        float torpid = Metabolism.BaseCost(
+            creature.Body, creature.Genome, creature.Mind.Brain, creature.Vitals, 0.35f,
+            torpid: true);
+
+        float upkeep = creature.Genome.LatentUpkeep()
+            * creature.Trait(TraitAxis.Metabolism)
+            * Metabolism.AgeFactor(creature.Vitals, creature.Genome);
+
+        Assert.True(torpid > upkeep * 0.99f,
+            "the machinery still costs what it costs while it is being used");
+    }
+
+    [Fact]
+    public void Torpor_DampsMovement_SoItCannotFlee()
+    {
+        var (world, creature) = Make(configure: g =>
+        {
+            var rng = new Pcg32(2);
+            Mutator.Unlock(g, LatentTraitId.Torpor, ref rng);
+        });
+
+        float Travel(bool torpid)
+        {
+            creature.Body.Speed = 0f;
+            creature.Body.Position = new Vector2(50f, 50f);
+
+            var intent = new Intent { Thrust = 1f, Torpor = torpid };
+            for (int i = 0; i < 60; i++)
+                Locomotion.Apply(
+                    creature.Body, creature.Energy, creature.Genome, intent, world.Field, 1f / 60f);
+
+            return creature.Body.Speed;
+        }
+
+        float awake = Travel(torpid: false);
+        float torpid = Travel(torpid: true);
+
+        Assert.True(torpid < awake * 0.5f,
+            "a torpid creature that can still run away is getting the discount for free");
+    }
+
+    /// <summary>
+    /// Dulled eyes are the third cost, and the one that makes torpor dangerous
+    /// rather than merely slow. Read at sense time from last tick's gate, because
+    /// sensing runs before thinking.
+    /// </summary>
+    [Fact]
+    public void Torpor_DullsVision()
+    {
+        var (world, creature) = Make(configure: g =>
+        {
+            var rng = new Pcg32(2);
+            Mutator.Unlock(g, LatentTraitId.Torpor, ref rng);
+        });
+
+        var senses = new Senses();
+        var destination = new float[creature.Mind.Brain.SensorCount];
+
+        var subject = new SenseSubject(
+            creature.Id, creature.Body, creature.Energy, creature.Vitals,
+            creature.Genes, creature.Mind, creature.Sight);
+
+        creature.Mind.Intent = new Intent { Torpor = false };
+        senses.Sample(subject, world.Field, 0f, destination);
+        float awake = creature.ForwardEye.Range;
+
+        creature.Mind.Intent = new Intent { Torpor = true };
+        senses.Sample(subject, world.Field, 0f, destination);
+        float torpid = creature.ForwardEye.Range;
+
+        Assert.True(torpid < awake, "torpor must cost sight, or resting carries no risk");
+        Assert.Equal(awake * Metabolism.TorporVisionFactor, torpid, 4);
+    }
+
     /// <summary>
     /// Quadratic, not linear. If movement cost were linear in speed there would be
     /// no reason ever to cruise, and "always flat out" would dominate.

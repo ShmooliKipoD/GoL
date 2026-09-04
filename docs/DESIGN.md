@@ -372,3 +372,116 @@ nobody has looked at it. Worth a glance before Step 4 builds on it.
 **Files:** `src/GoL.Sim/Board/{SpatialHash,Plants,PlantGrid,FertilityField,PheromoneField,BoardEnvironment}.cs`,
 `src/GoL.Render/{BoardRenderer,BoardCamera}.cs`,
 `src/GoL.App/Screens/BoardScreen.cs`, `tests/GoL.Sim.Tests/BoardTests.cs`.
+
+---
+
+## 6. Step 3c — Creature actions: a readout, and Torpor
+
+**Problem.** Before populations run, the owner asked to review the creature: what
+actions can it take, a way to list them all, and a way to see what it is doing now.
+
+The review answer came first, because it shaped everything else. Reading
+`InnateAction` and `Intent`: the creature had exactly **seven** actions — Thrust,
+Turn, Bite, Reproduce innately, plus Sprint, Scent A and Scent B once the matching
+attribute is unlocked. **No sleep, no flee, no hide.**
+
+And a deeper point than the missing entries: the brain is a *continuous controller,
+not a planner*. It emits a thrust every tick and never decides to flee.
+
+**The design turned on one correction from the owner.** The first plan listed
+`Chasing` and `Fleeing` as separate actions, recognised by a heuristic — "reversing
+while a creature is in view". The owner rejected it in one line:
+
+> Fleeing and chasing are the same action only with negative value.
+
+That is right, and it collapses the whole design. Both are `Move`: chase is positive
+thrust, flee is negative. Left and right are likewise one signed `Turn`. Modelling
+them apart would invent a distinction the controller does not have, and would then
+*need* the heuristic to sustain it.
+
+So the vocabulary became **the effector set itself** — `CreatureAction` mirrors
+`InnateAction` and the latent effector channels, one entry each, carrying a signed
+value read straight off `Intent`. Three things fell out of that:
+
+- No inference anywhere. Every row is a number the brain actually produced, so the
+  readout cannot drift from the real model.
+- The "current" action is simply the greatest magnitude, ties broken in a fixed
+  documented order (discrete events ahead of continuous ones) — rather than a
+  hand-ranked list of interpretations.
+- The soak histogram became a direct distribution over controller output, with no
+  predicate in between that could be miscalibrated. That mattered: a badly tuned
+  `Chasing` predicate would have flat-lined the histogram in exactly the way a
+  broken brain does, and the two would have been indistinguishable.
+
+`Idle` is deliberately **not** an enum member — it is the absence of an action.
+
+**Torpor** was added as the thirteenth latent attribute, so the one genuinely new
+action arrives by mutation like every other rather than being granted. It is the
+only action that *saves* energy, so it carries three costs rather than one: running
+cost ×0.35, thrust and turn ×0.15, eye range ×0.5. Each is pinned by its own test,
+so a regression names which half of the trade broke. Its own upkeep is charged in
+full even while resting — an attribute that paid for itself whenever it was used
+could never be selected against.
+
+The eye dulling reads *last* tick's gate, because sensing runs before thinking. That
+is the right way round: a creature cannot look first and then close its eyes.
+
+**Structure.** A new `Behaviour` component and an `ActionSystem` running **last**,
+after `LifecycleSystem`, so a birth is read from a stamp lifecycle just wrote rather
+than by re-deriving the reproduction predicate and risking the two disagreeing. That
+stamp is a new `Vitals.LastBirthTick` (long) rather than comparing the existing
+float `LastBirthTime` against `SimTime`: float equality standing in for "did this
+happen this tick" is exact today but silently becomes "never" the moment simulation
+time accumulates differently.
+
+`ActionSystem` writes only to `Behaviour`, and nothing in the simulation reads it
+back — otherwise the readout would start driving behaviour instead of describing it.
+It also skips the dead, which makes it moot whether an entity destroyed by
+`LifecycleSystem` is still visible to a later system in the same `world.Update()`,
+something Extended does not document.
+
+**Display.** A panel on `K` with a signed, centre-anchored bar per action, so `Move`
+reads as one axis with chase at one end and flee at the other; locked rows greyed
+rather than hidden, so the panel answers "what could this lineage acquire?" too. Plus
+the current action's name above the creature, in **screen space** — a world-space
+label would scale with zoom and be unreadable at both ends. `DrawActionLabel` takes
+an already-computed screen position because the board projects through
+`BoardCamera.WorldToScreen` while the lab has no camera at all and draws through a
+plain scale-and-offset matrix.
+
+**Verified.** 100 tests, up from 84. The strongest evidence was not a test:
+**the world hash and the entire population trajectory of a 30 000-tick run are
+byte-identical before and after this step** (`49BF88CF3354BE3E`), confirming the
+readout is inert and Torpor changes nothing until a lineage unlocks it.
+
+The soak runner gained a behaviour histogram. Its latent rows read 0.00% forever on
+a normal run, because 6000 ticks unlock nothing — and a row that is always zero is
+indistinguishable from a row that is broken. So `--unlock-all` was added to grant the
+starting population every attribute purely to prove them. With it: Sprint 1.94%,
+Scent A 0.17%, Scent B 0.10%, **Torpor 3.63%**, idle 0.11%.
+
+**The board was finally looked at.** The display was awake this time, and Step 3b's
+outstanding visual check is now closed — plants, soil patches, creatures, HUD and the
+inspector panels all render correctly. Two defects were found and fixed only because
+of it:
+
+- The board's auto-select branch was **dead**: it ran in the constructor, but
+  `Living` is published by `LifecycleSystem` and so is still empty there. Moved to
+  after the first step, and made to re-pin when the subject dies — otherwise the
+  panels vanished for good the first time one starved. Scoped to `GOL_OVERLAYS`, since
+  silently jumping to a new creature would be surprising during normal play.
+- Locked rows read `needs Sprint gland` and overran the name column. Shortened to
+  `locked`; the attribute panel already answers what a creature has.
+
+**Known, unchanged:** population still collapses over long runs (120 → 0 by tick
+27 000). That is pre-existing — the byte-identical baseline proves this step did not
+cause it — and it is precisely what Step 4 exists to tune. One cosmetic issue is
+noted but not fixed: with all thirteen attributes unlocked the attribute panel is
+taller than the window and overflows. It is only reachable through `GOL_LAB_TRAITS`.
+
+**Files:** `src/GoL.Sim/Core/CreatureAction.cs`, `src/GoL.Sim/Systems/ActionSystem.cs`
+(new); `src/GoL.Sim/Components/Components.cs`, `Core/{Locomotion,Metabolism,Senses,CreatureView}.cs`,
+`Genetics/LatentTraits.cs`, `Systems/{SimWorld,EnergySystem}.cs`;
+`src/GoL.Render/{InspectorRenderer,OverlayFlags}.cs`;
+`src/GoL.App/Screens/{Board,CreatureLab}Screen.cs`;
+`tools/GoL.Headless/Program.cs`; `tests/GoL.Sim.Tests/{ActionTests,MetabolismTests}.cs`.

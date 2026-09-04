@@ -137,12 +137,19 @@ load-bearing:
 | 4 | `ActuateSystem` | **First writer.** Everything before it only read |
 | 5 | `FeedSystem` | After movement, so a creature bites from where it ended up |
 | 6 | `EnergySystem` | After feeding, so what it ate is credited before it is charged |
-| 7 | `LifecycleSystem` | Last, so entities are never created or destroyed mid-iteration |
+| 7 | `LifecycleSystem` | Births and deaths, so entities are never created or destroyed mid-iteration |
+| 8 | `ActionSystem` | After lifecycle, so a birth is read from the tick stamp lifecycle just wrote rather than by re-deriving the reproduction predicate |
 
 The split that matters most: **sensing and thinking both complete before anything
 acts.** If creature 0 moved before creature 1 sensed, the run would depend on the
 order the entity list happens to be in, and reproducibility from a seed would be
 gone.
+
+`ActionSystem` writes only to `Behaviour`, and nothing in the simulation reads that
+component back. If anything did, the readout would start *driving* behaviour instead
+of describing it. It also skips the dead, which makes it moot whether an entity
+destroyed by `LifecycleSystem` is still visible to a later system in the same
+`world.Update()` — something Extended does not document.
 
 `LifecycleSystem` collects births and deaths into lists and applies them after its
 pass, births first — so a parent that dies this tick still leaves issue, and a

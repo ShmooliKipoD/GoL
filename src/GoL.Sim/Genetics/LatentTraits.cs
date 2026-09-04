@@ -49,6 +49,14 @@ public enum LatentTraitId
 
     /// <summary>Halves incoming bite damage, at the cost of some speed.</summary>
     ArmorPlating,
+
+    /// <summary>A rest state: cheap to run, but nearly immobile and half-blind.
+    /// <para>
+    /// Appended last, and every future trait must be too. Node-id slots are handed
+    /// out in catalog build order, so inserting anywhere else renumbers every
+    /// existing trait's sensors and effectors.
+    /// </para></summary>
+    Torpor,
 }
 
 /// <summary>What a latent trait costs, what it senses, and what it does.</summary>
@@ -246,6 +254,16 @@ public static class LatentTraitCatalog
             Description = "Halves bite damage, at the cost of speed",
             Upkeep = 0.030f,
             Slot = slot++,
+        });
+
+        Add(new LatentTrait
+        {
+            Id = LatentTraitId.Torpor,
+            Name = "Torpor",
+            Description = "Rests cheaply, but barely moves and barely sees",
+            Upkeep = 0.005f,
+            Slot = slot++,
+            EffectorChannels = 1,
         });
 
         return entries;

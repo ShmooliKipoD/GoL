@@ -69,8 +69,12 @@ Slots 0–3 are innate (innate senses, forward vision). Latent traits start at s
 
 ## Latent attributes
 
-Twelve, each with a metabolic upkeep and the nodes it registers. `Prerequisite`
+Thirteen, each with a metabolic upkeep and the nodes it registers. `Prerequisite`
 gives a shallow tech tree with no extra machinery.
+
+**Append new ones to the end of `LatentTraitId`.** Node-id slots are handed out in
+catalog build order, so inserting anywhere else renumbers every existing trait's
+sensors and effectors.
 
 | Attribute | Needs | Upkeep | Adds |
 |---|---|---|---|
@@ -86,9 +90,16 @@ gives a shallow tech tree with no extra machinery.
 | Sprint gland | — | 0.004 | 1 effector: speed burst at steep cost |
 | Memory cell | — | 0.009 | 2 self-connected hidden neurons |
 | Armour plating | — | 0.030 | Halves bite damage, costs speed |
+| Torpor | — | 0.005 | 1 effector: rest cheaply, but barely move and barely see |
 
 **Every attribute costs upkeep.** A free attribute is never selected against, so
-populations would accumulate all twelve and none would signify anything.
+populations would accumulate all thirteen and none would signify anything.
+
+Torpor is the only one that *saves* energy, so it carries three costs rather than
+one: running cost ×0.35, thrust and turn ×0.15, eye range ×0.5. A lineage that
+evolves it survives famine; one that oversleeps gets eaten. Its own upkeep is
+charged in full even while the gate is open — an attribute that paid for itself
+whenever it was used could never be selected against.
 
 ## Mutation
 
@@ -177,6 +188,27 @@ gait at all first requires evolving a recurrent oscillator from scratch — a st
 first step that most lineages never take.
 
 Innate effectors: thrust, turn, bite, reproduce.
+
+**The creature has exactly eight actions**, and the readout's vocabulary
+(`CreatureAction`) *is* that effector set: Move, Turn, Bite, Reproduce innately,
+plus Sprint, Scent A, Scent B and Torpor once the matching attribute is unlocked.
+
+Chasing and fleeing are **not two actions** — they are one signed `Move`, chase
+positive and flee negative. Left and right are likewise one signed `Turn`. The brain
+is a continuous controller, not a planner: it emits a thrust every tick and never
+chooses between named behaviours. Splitting one effector into two named entries
+would invent a distinction the controller does not have, and would then need a "is
+something in view?" heuristic to sustain it. Reading the sign needs no heuristic and
+cannot drift from the real model.
+
+"Chase" and "Flee" are therefore human words for the two signs of a thrust. The
+creature is advancing or reversing and has no notion of a pursuer.
+
+The action a creature is *most* doing is the greatest magnitude this tick, ties
+broken in a fixed documented order — `Reproduce, Bite, Torpor, Sprint, ScentA,
+ScentB, Move, Turn` — discrete events ahead of continuous ones. Nothing above the
+deadband is **idle**, which is deliberately not an enum member: idle is the absence
+of an action, not one of them.
 
 Vision divides each eye's cone into **7 fixed angular bins** reporting the nearest
 hit per bin as (closeness, is-plant, is-creature). Fixed-size regardless of how many

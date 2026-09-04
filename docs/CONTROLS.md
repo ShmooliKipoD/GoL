@@ -34,6 +34,7 @@ is; the difference is deliberate.
 | `M` | Mouth — the bite arc swept to full reach, plus a line to whatever is in range now |
 | `B` | Brain graph — sensors left, hidden by depth, effectors right; green edges excitatory, red inhibitory, node brightness is live activation |
 | `A` | Attribute panel — every trait with a bar, then the attributes this lineage has acquired |
+| `K` | Actions panel — every action the creature could take, with a signed bar; greyed when the genome cannot perform it. Also puts the current action's name above the creature |
 | `G` | Pheromone field |
 | `F1` | All overlays on/off |
 | `U` | Force an attribute unlock, so the trait system is demonstrable without waiting for a 0.4% chance |
@@ -53,7 +54,7 @@ is; the difference is deliberate.
 | Arrows / `WASD`, middle-drag | Pan. Speed scales with zoom, so a pan covers the same amount of screen however far in you are |
 | Left click | Select a creature and pin the inspector to it |
 | `F` | Follow the selection. Wrap-aware, so following across the world seam does not whip the camera across the map |
-| `V` `N` `M` `B` `A` | The same inspector overlays as the lab, on the selected creature |
+| `V` `N` `M` `B` `A` `K` | The same inspector overlays as the lab, on the selected creature |
 | `G` | Soil fertility, drawn beneath everything |
 | `H` | Scent, tinted per channel |
 | `F1` | All overlays on/off |
@@ -76,6 +77,6 @@ scripted. These environment variables are how a screen gets looked at directly.
 | `GOL_SCREEN=lab` | Start in the Creature Lab |
 | `GOL_SCREEN=board` | Start on the populated board |
 | `GOL_LAB_TRAITS=n` | Give the lab's creature `n` unlocked attributes at birth |
-| `GOL_OVERLAYS=all` | Start with every overlay on, and something selected |
+| `GOL_OVERLAYS=all` | Start with every overlay on, and keep the inspector pinned to a living creature — re-pinning when the subject dies, or the panels would vanish for good the first time one starved |
 
 Unrecognised `GOL_SCREEN` values fall back to the main menu.

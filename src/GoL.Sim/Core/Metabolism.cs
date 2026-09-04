@@ -51,6 +51,16 @@ public static class Metabolism
     /// <summary>Armour's speed penalty.</summary>
     public const float ArmorSpeedFactor = 0.85f;
 
+    /// <summary>Upkeep multiplier while torpid. The gain side of the trade.</summary>
+    public const float TorporCostFactor = 0.35f;
+
+    /// <summary>Thrust and turn multiplier while torpid. Low enough that a torpid
+    /// creature cannot flee, which is what stops resting from being free.</summary>
+    public const float TorporMoveFactor = 0.15f;
+
+    /// <summary>Eye-range multiplier while torpid. It may not see what is coming.</summary>
+    public const float TorporVisionFactor = 0.5f;
+
     /// <summary>Energy per second a bite draws from its target.</summary>
     public const float BiteRate = 22f;
 
@@ -72,13 +82,20 @@ public static class Metabolism
     /// all scaled by the genome's metabolism and by age.
     /// </summary>
     public static float BaseCost(
-        Body body, Genome genome, Brain brain, Vitals vitals, float baseRate)
+        Body body, Genome genome, Brain brain, Vitals vitals, float baseRate,
+        bool torpid = false)
     {
-        float structural =
+        float running =
             baseRate
             + SizeCost * body.Mass
-            + BrainCost * (brain.NodeCount + brain.ConnCount)
-            + genome.LatentUpkeep();
+            + BrainCost * (brain.NodeCount + brain.ConnCount);
+
+        // Torpor discounts the running cost only. Trait upkeep is charged in full
+        // even while resting: an attribute that paid for itself whenever it was
+        // used could never be selected against.
+        if (torpid) running *= TorporCostFactor;
+
+        float structural = running + genome.LatentUpkeep();
 
         return structural * genome.Trait(TraitAxis.Metabolism) * AgeFactor(vitals, genome);
     }

@@ -51,6 +51,15 @@ public sealed class Vitals
     public float LastBirthTime = float.NegativeInfinity;
     public bool Alive = true;
 
+    /// <summary>Tick of the most recent birth, or -1 for never.
+    /// <para>
+    /// A tick counter rather than a comparison against <see cref="LastBirthTime"/>:
+    /// that is a float, and "did this happen this tick" written as float equality is
+    /// exact today but silently becomes "never" the moment simulation time
+    /// accumulates differently. A tick count is exact by construction.
+    /// </para></summary>
+    public long LastBirthTick = -1;
+
     /// <summary>Simulation tick this creature was born on. Part of the key for its
     /// random stream, so slot reuse cannot make two creatures share a sequence.</summary>
     public long BirthTick;
@@ -107,6 +116,49 @@ public sealed class Mind
         if (Sensors.Length < Brain.SensorCount) Sensors = new float[Brain.SensorCount];
         if (Effectors.Length < Brain.EffectorCount) Effectors = new float[Brain.EffectorCount];
     }
+}
+
+/// <summary>
+/// What this creature is doing, as a readout over its effectors.
+/// <para>
+/// Derived presentation state, kept off <see cref="Mind"/> so that component does
+/// not become a bag of unrelated fields. Written only by
+/// <c>ActionSystem</c> and read by renderers, the soak runner and tests - nothing
+/// in the simulation ever reads it back, or the readout would start driving
+/// behaviour instead of describing it.
+/// </para>
+/// </summary>
+public sealed class Behaviour
+{
+    /// <summary>Every action's value this tick, indexed by <see cref="CreatureAction"/>.
+    /// Signed for Move and Turn; zero for anything this genome cannot do.</summary>
+    public readonly float[] Values = new float[Actions.Count];
+
+    /// <summary>The action with the greatest magnitude. Only meaningful when
+    /// <see cref="Active"/>.</summary>
+    public CreatureAction Current;
+
+    /// <summary>False when nothing cleared the deadband - the idle state.</summary>
+    public bool Active;
+
+    /// <summary>Actions this genome can perform, as a bitmask over
+    /// <see cref="CreatureAction"/>.</summary>
+    public int AvailableMask;
+
+    /// <summary>A bite connected this tick, as opposed to the mouth merely opening.</summary>
+    public bool Fed;
+
+    /// <summary>A birth happened this tick.</summary>
+    public bool Bred;
+
+    public float Value(CreatureAction action) => Values[(int)action];
+
+    public bool Can(CreatureAction action) => (AvailableMask & (1 << (int)action)) != 0;
+
+    /// <summary>What to call what it is doing right now.</summary>
+    public string Label() => Active
+        ? Actions.Label(Current, Values[(int)Current], Fed, Bred)
+        : Actions.IdleLabel;
 }
 
 /// <summary>The eyes, and what they currently see.</summary>

@@ -103,9 +103,16 @@ public sealed class Senses
     {
         var genome = creature.Genome;
 
+        // Torpor reads last tick's gate, because sensing runs before thinking:
+        // Mind.Intent still holds what the brain decided on the previous tick. A
+        // creature that settles into torpor goes half-blind one tick later, which is
+        // the right way round - it cannot look first and then close its eyes.
+        bool torpid = creature.Mind.Intent.Torpor;
+
         var forward = creature.Sight.Forward;
         forward.HeadingOffset = 0f;
         forward.Range = genome.Trait(TraitAxis.EyeRange);
+        if (torpid) forward.Range *= Metabolism.TorporVisionFactor;
         forward.HalfFov = genome.Trait(TraitAxis.EyeHalfFov);
         forward.Clear();
 
