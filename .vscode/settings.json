@@ -1,0 +1,22 @@
+{
+  // The C# extension locates the .NET CLI by searching these DIRECTORIES for a
+  // "dotnet" executable (it joins the directory and the exe name itself - so this
+  // is a folder, not the binary). The setting defaults to an empty list, in which
+  // case the extension falls back to running a bare `dotnet --info` through
+  // /bin/sh, and reports:
+  //
+  //     Error running dotnet --info: Command failed: dotnet --info
+  //     /bin/sh: dotnet: command not found
+  //
+  // Same root cause as the absolute path in tasks.json: macOS registers dotnet in
+  // /etc/paths.d/dotnet, but path_helper only reads that during *login shell*
+  // startup, so a VS Code launched from the Dock or Finder has no dotnet on PATH -
+  // and /bin/sh -c loads no profile of its own to recover it.
+  //
+  // The "omnisharp." prefix is legacy naming. The setting still applies with the
+  // modern Roslyn language server; it is read by the shared CLI-discovery helper,
+  // not by OmniSharp specifically.
+  "omnisharp.dotNetCliPaths": [
+    "/usr/local/share/dotnet"
+  ]
+}

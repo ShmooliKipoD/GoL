@@ -56,6 +56,28 @@ either brings a distinct failure back:
   the ways the `ContentLoadException: Content/Fonts/UiFont.xnb` crash below
   arrives.
 
+The **C# extension needs telling separately** — fixing the tasks does not fix it,
+and it surfaces as a popup even when the build itself succeeds:
+
+```
+Error running dotnet --info: Command failed: dotnet --info
+/bin/sh: dotnet: command not found
+```
+
+`.vscode/settings.json` sets `omnisharp.dotNetCliPaths`. That is a list of
+**directories** the extension searches for a `dotnet` executable (it joins the
+directory and the exe name itself). It defaults to `[]`, and with nothing found the
+extension falls back to a bare `dotnet --info` through `/bin/sh` — which loads no
+profile and so cannot recover `PATH` either. The `omnisharp.` prefix is legacy
+naming; the setting is read by the shared CLI-discovery helper and still applies
+under the modern Roslyn language server.
+
+Both files hardcode `/usr/local/share/dotnet`, the standard .NET installer location
+on both Intel and Apple Silicon. If dotnet ever moves, both need updating. The
+alternative root fix — giving the VS Code process a real `PATH`, by launching it
+with `code .` from a terminal or via `launchctl setenv` — would cover every
+extension at once, at the cost of not being version-controlled.
+
 ## Architecture
 
 Five projects. The dependency direction is the whole design:
