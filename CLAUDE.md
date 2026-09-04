@@ -73,10 +73,37 @@ naming; the setting is read by the shared CLI-discovery helper and still applies
 under the modern Roslyn language server.
 
 Both files hardcode `/usr/local/share/dotnet`, the standard .NET installer location
-on both Intel and Apple Silicon. If dotnet ever moves, both need updating. The
-alternative root fix — giving the VS Code process a real `PATH`, by launching it
-with `code .` from a terminal or via `launchctl setenv` — would cover every
-extension at once, at the cost of not being version-controlled.
+on both Intel and Apple Silicon. If dotnet ever moves, both need updating.
+
+### The root fix, on this machine
+
+Patching consumers one at a time was losing — three symptoms appeared in a row
+(the task, the `dotnet --info` popup, then the debugger), each from a different
+extension with its own discovery mechanism. The cause underneath all of them is
+that **a GUI-launched process has no dotnet on `PATH` at all**.
+
+So the GUI session's `PATH` is now set directly, by a LaunchAgent at
+`~/Library/LaunchAgents/local.setenv.path.plist` that runs
+`launchctl setenv PATH …` at login. Verify it with:
+
+```bash
+launchctl print gui/$(id -u) | sed -n '/environment = {/,/}/p'
+```
+
+`PATH` there should list `/usr/local/share/dotnet`. **The value is inherited at
+process launch**, so after changing it VS Code must be fully quit (`Cmd+Q`) and
+reopened — reloading the window is not enough.
+
+To remove it: `launchctl unload ~/Library/LaunchAgents/local.setenv.path.plist`
+and delete the file.
+
+The two settings files above stay useful regardless — they make the repo work for
+anyone cloning it who has not done this to their own machine.
+
+Unrelated but adjacent: `/etc/paths.d/dotnet-cli-tools` has **no trailing
+newline**, so `path_helper` glues it to the next file and a login shell ends up
+with a literal, unexpanded `~/.dotnet/tools` in `PATH`. Harmless, but it means
+that entry has never actually worked. Fixing it needs `sudo`.
 
 ## Architecture
 
