@@ -47,7 +47,11 @@ public static class Actions
 {
     public static readonly CreatureAction[] All = Enum.GetValues<CreatureAction>();
 
-    public const int Count = 8;
+    /// <summary>Derived from the enum, never hardcoded. A literal here would leave
+    /// a newly added action out of <see cref="Read"/>, out of
+    /// <see cref="AvailableMask"/> and out of every buffer sized by it - silently,
+    /// since nothing would fail to compile.</summary>
+    public static readonly int Count = All.Length;
 
     /// <summary>Below this magnitude an action does not count as happening. Without
     /// it every creature would read as permanently turning, because a brain output
@@ -59,6 +63,13 @@ public static class Actions
     /// continuous ones, so a creature that is both biting and cruising reports the
     /// bite. Fixed and documented: an unordered "pick one" would flicker between
     /// equally-true states and make the readout useless for spotting patterns.
+    /// </summary>
+    /// <summary>
+    /// Every action, in tie-break order. <b>A new action must be added here too</b> -
+    /// <see cref="BuildRank"/> enforces it rather than trusting the reminder, because
+    /// a missing entry would leave that action at rank 0, tied with
+    /// <see cref="CreatureAction.Reproduce"/> for top priority, and it would quietly
+    /// win every tie it entered.
     /// </summary>
     private static readonly CreatureAction[] TieBreak =
     {
@@ -202,6 +213,13 @@ public static class Actions
 
     private static int[] BuildRank()
     {
+        if (TieBreak.Length != Count)
+        {
+            throw new InvalidOperationException(
+                $"TieBreak lists {TieBreak.Length} of {Count} actions. Every action needs "
+                + "an explicit priority; one left out would rank 0 and win every tie.");
+        }
+
         var rank = new int[Count];
         for (int i = 0; i < TieBreak.Length; i++) rank[(int)TieBreak[i]] = i;
         return rank;

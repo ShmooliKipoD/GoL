@@ -27,6 +27,28 @@ public class ActionTests
         return values;
     }
 
+    /// <summary>
+    /// The guard against a future action being added and silently ignored. Count
+    /// must come from the enum, and every action must carry an explicit tie-break
+    /// priority - one left out would rank 0, tie with Reproduce for the top slot,
+    /// and quietly win every tie it entered.
+    /// </summary>
+    [Fact]
+    public void Vocabulary_CoversEveryEnumMember()
+    {
+        Assert.Equal(Actions.All.Length, Actions.Count);
+
+        // Touching Rank forces BuildRank, which throws if TieBreak is incomplete.
+        Assert.True(Actions.Current(new float[Actions.Count], out _) == false);
+
+        foreach (var action in Actions.All)
+        {
+            Assert.False(string.IsNullOrEmpty(Actions.Name(action)));
+            Assert.False(string.IsNullOrEmpty(Actions.PoleName(action, 1f)));
+            Assert.False(string.IsNullOrEmpty(Actions.PoleName(action, -1f)));
+        }
+    }
+
     [Fact]
     public void EveryAction_ReadsBackTheIntentItCameFrom()
     {
