@@ -160,16 +160,30 @@ public static class Locomotion
         }
     }
 
-    /// <summary>All four gates a birth must pass.</summary>
-    public static bool CanReproduce(
-        Energy energy, Vitals vitals, Genome genome, in Intent intent, float simTime)
+    /// <summary>
+    /// The three gates a <b>body</b> must pass to bear young: old enough, past the
+    /// cooldown, and with energy to spare.
+    /// <para>
+    /// Split from wanting to. Selecting the Reproduce action is what expresses the
+    /// brain's wish - the runner only picks it when that effector clears the
+    /// deadband - so re-testing the same gate inside the action conflated two
+    /// separate questions. It also made the Creature Lab's force key useless for
+    /// breeding: forcing the action stands in for the brain's wanting, and a genome
+    /// whose gate never opened could never be watched breeding at all.
+    /// </para>
+    /// </summary>
+    public static bool CanBear(Energy energy, Vitals vitals, Genome genome, float simTime)
     {
-        if (!intent.Reproduce) return false;
         if (vitals.Age < genome.Trait(TraitAxis.MatureAge)) return false;
         if (simTime - vitals.LastBirthTime < Metabolism.BirthCooldown) return false;
 
         return energy.Fraction >= genome.Trait(TraitAxis.ReproduceThreshold);
     }
+
+    /// <summary>All four gates a birth must pass: wanting to, and being able to.</summary>
+    public static bool CanReproduce(
+        Energy energy, Vitals vitals, Genome genome, in Intent intent, float simTime) =>
+        intent.Reproduce && CanBear(energy, vitals, genome, simTime);
 
     private static float Read(ReadOnlySpan<float> effectors, int index) =>
         index >= 0 && index < effectors.Length ? effectors[index] : 0f;

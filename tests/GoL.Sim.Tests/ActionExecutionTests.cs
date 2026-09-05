@@ -304,4 +304,91 @@ public class ActionExecutionTests
         Assert.Equal(ActionStatus.Blocked, doing.Status);
         Assert.Equal(before, body.Speed);
     }
+
+    // --- Breed -----------------------------------------------------------------
+
+    /// <summary>Ages a creature past maturity and fills it up, so the only gate left
+    /// is the one under test.</summary>
+    private static void MakeReadyToBreed(SimWorld world, int id)
+    {
+        var vitals = world.Get<Vitals>(id);
+        var energy = world.Get<Energy>(id);
+
+        vitals.Age = world.Get<Genes>(id).Trait(TraitAxis.MatureAge) + 10f;
+        vitals.LastBirthTime = float.NegativeInfinity;
+        energy.Current = energy.Maximum;
+    }
+
+    /// <summary>
+    /// A creature too young to breed must say so, not sit wanting a birth it will
+    /// never get. This was a silent predicate inside the lifecycle loop; a creature
+    /// could spend its whole tick on it and nothing would report that.
+    /// </summary>
+    [Fact]
+    public void Breed_WhenTooYoung_ReportsBlocked()
+    {
+        var (world, _) = MakeLab();
+        int id = world.Spawn(Seed(), new Vector2(170f, 170f), 0f);
+
+        var doing = world.Get<Doing>(id);
+        doing.Forced = CreatureAction.Reproduce;
+
+        world.Get<Vitals>(id).Age = 0f;
+
+        world.Step();
+
+        Assert.Equal(ActionStatus.Blocked, doing.Status);
+        Assert.False(doing.WantsBirth);
+        Assert.Equal(1, world.Population);
+    }
+
+    /// <summary>Every gate passed, so a child arrives - and the decision belongs to
+    /// the action while the birth itself still belongs to the lifecycle system.</summary>
+    [Fact]
+    public void Breed_WhenEveryGatePasses_ProducesAChild()
+    {
+        var (world, _) = MakeLab();
+        int id = world.Spawn(Seed(), new Vector2(170f, 170f), 0f);
+
+        var doing = world.Get<Doing>(id);
+        doing.Forced = CreatureAction.Reproduce;
+
+        // Intent.Reproduce is one of the four gates and comes from the brain, so the
+        // run has to reach a tick where it is open.
+        for (int i = 0; i < 400 && world.Population < 2; i++)
+        {
+            MakeReadyToBreed(world, id);
+            world.Step();
+        }
+
+        Assert.True(world.Population >= 2, "never produced a child with every gate held open");
+    }
+
+    /// <summary>
+    /// One decision, one child. The gates can close underneath a running action - a
+    /// bite of energy spent, the cooldown restarting - and breeding twice off a
+    /// single CanStart would hand a creature a free offspring.
+    /// </summary>
+    [Fact]
+    public void Breed_DoesNotProduceTwoChildrenFromOneDecision()
+    {
+        var (world, _) = MakeLab();
+        int id = world.Spawn(Seed(), new Vector2(170f, 170f), 0f);
+
+        var doing = world.Get<Doing>(id);
+        doing.Forced = CreatureAction.Reproduce;
+
+        MakeReadyToBreed(world, id);
+
+        for (int i = 0; i < 400 && world.Population < 2; i++) world.Step();
+        Assert.True(world.Population >= 2, "no birth to test against");
+
+        int after = world.Population;
+
+        // The cooldown is now running, and nothing tops the parent back up.
+        for (int i = 0; i < 60; i++) world.Step();
+
+        Assert.Equal(after, world.Population);
+        Assert.False(doing.WantsBirth);
+    }
 }

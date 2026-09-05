@@ -59,7 +59,8 @@ public sealed class SimWorld
             .AddSystem(new ActionRunnerSystem(this,
                 new MoveAction(),
                 new TurnAction(),
-                new EatAction()))
+                new EatAction(),
+                new BreedAction()))
             .AddSystem(new EnergySystem(this))
             .AddSystem(new LifecycleSystem(this))
             .AddSystem(new ActionSystem(this))
