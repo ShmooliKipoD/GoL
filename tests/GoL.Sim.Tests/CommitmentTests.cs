@@ -199,6 +199,37 @@ public class CommitmentTests
             "it should come back as a seedling, not a full plant");
     }
 
+    /// <summary>
+    /// The label is a summary for a human, and one that changes ten times a second
+    /// is not one. Two effectors at nearly the same magnitude used to swap the
+    /// headline every tick over a creature that was plainly moving smoothly.
+    /// </summary>
+    [Fact]
+    public void TheHeadlineAction_DoesNotFlickerBetweenNearEqualValues()
+    {
+        var rng = new Pcg32(3);
+        var genome = Genome.CreateSeed(ref rng);
+
+        var values = new float[Actions.Count];
+        values[(int)CreatureAction.Move] = 0.40f;
+        values[(int)CreatureAction.Turn] = 0.41f;
+
+        Assert.True(Actions.Current(values, out var first));
+
+        // Turn edges ahead, then Move does, then Turn again - within the margin.
+        Assert.True(Actions.Current(values, out var held, first));
+        Assert.Equal(first, held);
+
+        values[(int)CreatureAction.Move] = 0.42f;
+        Assert.True(Actions.Current(values, out held, first));
+        Assert.Equal(first, held);
+
+        // A decisive lead still takes over, or the readout would stop being true.
+        values[(int)CreatureAction.Move] = 0.95f;
+        Assert.True(Actions.Current(values, out var taken, first));
+        Assert.Equal(CreatureAction.Move, taken);
+    }
+
     private static (SimWorld World, CreatureView Subject) Lab(ulong seed = 1)
     {
         var config = new SimConfig { Seed = (int)seed, WorldSize = 340f };

@@ -89,11 +89,25 @@ long chasing = 0, fleeing = 0, idle = 0, total = 0;
 var previousAction = new int[1024];
 long switches = 0, switchSamples = 0;
 
+// How often an open mouth actually reaches food. A creature can hold Bite wide
+// open and starve, because the gate says "I want to eat" and nothing says "there
+// is anything here" - the readout calls that Biting rather than Feeding, and this
+// turns the distinction into a number.
+long mouthOpen = 0, bitesConnected = 0;
+
 for (int tick = 1; tick <= ticks; tick++)
 {
     world.Step();
     Accumulate(world, histogram, ref chasing, ref fleeing, ref idle, ref total);
     CountSwitches(world, ref previousAction, ref switches, ref switchSamples);
+
+    foreach (int id in world.Living)
+    {
+        var m = world.Get<GoL.Sim.Components.Mind>(id);
+        if (!m.Intent.Bite) continue;
+        mouthOpen++;
+        if (m.BitThisTick) bitesConnected++;
+    }
     if (tick % report == 0) Report(world, tick, environment);
 }
 
@@ -105,6 +119,13 @@ Console.WriteLine($"{ticks} ticks in {stopwatch.ElapsedMilliseconds} ms "
 Console.WriteLine($"world hash: {world.Hash():X16}");
 
 PrintBehaviour(histogram, chasing, fleeing, idle, total);
+
+if (mouthOpen > 0)
+{
+    Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+        "  {0,-40} {1,6:F2}%   ({2} of {3} open-mouth ticks)",
+        "bites that reached food", 100.0 * bitesConnected / mouthOpen, bitesConnected, mouthOpen));
+}
 
 if (switchSamples > 0)
 {

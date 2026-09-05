@@ -184,11 +184,61 @@ public static class Actions
     }
 
     /// <summary>
+    /// The same, but <see cref="CreatureAction.Move"/> and
+    /// <see cref="CreatureAction.Turn"/> are read from the <b>body</b> rather than
+    /// from the intent.
+    /// <para>
+    /// The question the readout answers is "what is it doing", not "what did it ask
+    /// for", and those stopped being the same thing once the body gained momentum:
+    /// thrust and turn are eased, so a brain can flip its intent every tick while
+    /// the creature visibly glides. Reporting raw intent made the label flicker
+    /// several times a second over a creature that was plainly moving smoothly.
+    /// </para>
+    /// <para>
+    /// The gates still come from intent. Biting is a decision, and a mouth is either
+    /// open or it is not - there is no momentum to read instead.
+    /// </para>
+    /// </summary>
+    public static void Read(
+        Genome genome, in Intent intent, float speed, float maxSpeed,
+        float angularVelocity, float turnRate, Span<float> destination)
+    {
+        Read(genome, intent, destination);
+
+        destination[(int)CreatureAction.Move] =
+            maxSpeed > 0f ? Math.Clamp(speed / maxSpeed, -1f, 1f) : 0f;
+
+        destination[(int)CreatureAction.Turn] =
+            turnRate > 0f ? Math.Clamp(angularVelocity / turnRate, -1f, 1f) : 0f;
+    }
+
+    /// <summary>
+    /// How far a challenger must exceed the action already showing before it takes
+    /// over.
+    /// <para>
+    /// Without this the label flickers: "current" is simply the largest magnitude,
+    /// so two effectors sitting at nearly the same value - a creature cruising while
+    /// turning gently - swap places every tick and the readout reports a creature
+    /// changing its mind many times a second when its actual output is steady. That
+    /// is a defect in the <i>readout</i>, distinct from the motor chatter hysteresis
+    /// fixed in the body, and it produced the same complaint.
+    /// </para>
+    /// </summary>
+    public const float TakeoverMargin = 1.3f;
+
+    /// <summary>
     /// The action a creature is most doing: the greatest magnitude this tick, ties
     /// broken by <see cref="TieBreak"/>. Returns false when nothing clears the
     /// deadband - that is the idle state, and it is deliberately not an enum member.
+    /// <para>
+    /// <paramref name="showing"/> is what the readout is currently reporting; it
+    /// keeps its place unless something clearly beats it. Pass no incumbent and this
+    /// is a plain largest-magnitude pick.
+    /// </para>
     /// </summary>
-    public static bool Current(ReadOnlySpan<float> values, out CreatureAction current)
+    public static bool Current(
+        ReadOnlySpan<float> values, out CreatureAction current,
+        CreatureAction? showing = null)
     {
         current = default;
         float best = Deadband;
@@ -208,7 +258,14 @@ public static class Actions
             }
         }
 
-        return found;
+        if (!found || showing is null || current == showing.Value) return found;
+
+        // The incumbent holds unless the winner clearly beats it.
+        float incumbent = MathF.Abs(values[(int)showing.Value]);
+        if (incumbent >= Deadband && best < incumbent * TakeoverMargin)
+            current = showing.Value;
+
+        return true;
     }
 
     private static int[] BuildRank()

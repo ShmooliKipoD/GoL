@@ -196,6 +196,12 @@ public sealed class Behaviour
     /// <summary>False when nothing cleared the deadband - the idle state.</summary>
     public bool Active;
 
+    /// <summary>Seconds the current action has been showing. The headline label is a
+    /// summary for a human, and a summary that changes ten times a second is not one
+    /// - the per-action bars keep reporting every value continuously, so holding this
+    /// steady hides nothing.</summary>
+    public float HeldFor;
+
     /// <summary>Actions this genome can perform, as a bitmask over
     /// <see cref="CreatureAction"/>.</summary>
     public int AvailableMask;

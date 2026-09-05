@@ -236,9 +236,20 @@ public class ActionTests
             var behaviour = view.Behaviour;
 
             Assert.Equal(Actions.AvailableMask(view.Genome), behaviour.AvailableMask);
+
+            // Move reads from the body, not the intent. The readout answers "what is
+            // it doing", and once the body gained momentum those stopped being the
+            // same thing - a brain can flip its intent every tick while the creature
+            // visibly glides.
+            float maxSpeed = Metabolism.EffectiveMaxSpeed(view.Genome, view.LastIntent.Sprint);
             Assert.Equal(
-                Actions.Value(CreatureAction.Move, view.LastIntent),
+                Math.Clamp(view.Body.Speed / maxSpeed, -1f, 1f),
                 behaviour.Value(CreatureAction.Move), 5);
+
+            // The gates still come from intent - a mouth is open or it is not.
+            Assert.Equal(
+                Actions.Value(CreatureAction.Bite, view.LastIntent),
+                behaviour.Value(CreatureAction.Bite), 5);
 
             Assert.False(string.IsNullOrEmpty(view.ActionLabel));
         }
