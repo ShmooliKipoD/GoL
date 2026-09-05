@@ -643,3 +643,76 @@ the old contract and were updated.
 `src/GoL.Sim/Systems/ThinkSystem.cs`, `src/GoL.Sim/Components/Components.cs`,
 `src/GoL.Sim/Board/BoardEnvironment.cs`, `src/GoL.Render/InspectorRenderer.cs`,
 `tools/GoL.Headless/Program.cs`, `tests/GoL.Sim.Tests/{CommitmentTests,FeedingTests}.cs`.
+
+---
+
+## 9. Step 3f — A bite is an event, not a drain
+
+**Problem.** *"The creature still doesn't gain any energy although he is eating."*
+
+Twice I explained this as the creature failing to reach food, which was true but not
+the whole story — and re-reading the original request showed I had built the wrong
+mechanic. The owner had asked for exactly this: *"every green start with amount of
+calories, and when the creature bite it he consume amount of calories."* That
+describes **discrete bites**. I implemented a continuous drain.
+
+At `BiteRate = 22/s`, a connecting tick credited `22 × 1/60 × 0.55 ≈ 0.2` energy
+against a maximum of 193, printed to one decimal. Even a creature feeding perfectly
+moved the figure by a fraction per tick, and one feeding intermittently — which is
+every unevolved genome — showed nothing at all against a steady upkeep.
+
+**Now** a bite takes a mouthful of `BiteSize = 9` calories and the creature chews for
+`BiteInterval = 0.4 s`. Sustained throughput is roughly the old 22/s, so eating is no
+faster; it is simply no longer spread so thin it cannot be seen. A 35-calorie lab
+green is four bites, which is legible.
+
+The chew countdown lives **inside `ResolveBite`** rather than in a system. It was
+first put in `SenseSystem` beside the other per-tick clearing, and four tests failed
+immediately — they call `ResolveBite` directly, so the cooldown never ticked down and
+only one bite ever landed. The tests were right: a bite should be entirely described
+by the call that performs it. Moving it made all four pass untouched.
+
+**Two readout defects were fixed alongside**, both of which had produced the
+complaint *"when he decides to eat, why does it switch to move?"*:
+
+- Current action was simply the largest magnitude, so two effectors at nearly equal
+  values swapped the headline every tick while the output was steady. A challenger
+  now needs a margin, and the shown action holds for a minimum dwell — with **idle
+  counted as a state**, since a creature drifting around the deadband slips in and
+  out of it constantly and treating that as "no action" let the flicker straight back
+  through.
+- `Move` and `Turn` were read from `Intent` — what the brain *asked for* — while the
+  body had gained momentum from the turn easing. The creature glided smoothly and the
+  label twitched. Both now read from the body. Gates still come from intent: a mouth
+  is open or it is not.
+
+Single-creature lab, switches per second: seed 2 **10.98 → 2.09**, seed 5
+**14.28 → 2.19**, seed 8 **5.84 → 1.48**.
+
+**Result**, same lab creature and settings, at comparable age:
+
+| | before | after |
+|---|---|---|
+| energy | 30.2 / 193 | **90.2 / 193** |
+| calories eaten | 8 | **61** |
+
+**Instrumentation.** The soak runner gained *bites landed per creature-minute* and
+*time with its mouth open* — the pair that separates "cannot find food" from "found
+it and gained nothing". The intake smoothing window was lengthened to two seconds,
+because a fast filter reads near zero between discrete bites and spikes on the tick
+one lands.
+
+**Still true:** nothing steers a creature toward food. An unevolved genome can hold
+its mouth open indefinitely — one lab seed does exactly that for all 6000 ticks — and
+only connect when a green happens to drift into its arc. That remains evolution's
+job, and the open question is whether the lab should be seeded from selected stock so
+it demonstrates feeding rather than starting from a creature that cannot feed itself.
+
+**Verified.** 121 tests. New ones pin that one bite takes a mouthful and the next
+does not land until the chew interval has passed, and that the headline action does
+not flicker between near-equal values but still yields to a decisive lead.
+
+**Files:** `src/GoL.Sim/Core/{Metabolism,LabEnvironment,CreatureAction}.cs`,
+`src/GoL.Sim/Board/BoardEnvironment.cs`, `src/GoL.Sim/Components/Components.cs`,
+`src/GoL.Sim/Systems/{ActionSystem,SenseSystem}.cs`, `tools/GoL.Headless/Program.cs`,
+`tests/GoL.Sim.Tests/{FeedingTests,CommitmentTests,ActionTests}.cs`.

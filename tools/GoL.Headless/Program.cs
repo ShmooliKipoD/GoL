@@ -93,7 +93,7 @@ long switches = 0, switchSamples = 0;
 // open and starve, because the gate says "I want to eat" and nothing says "there
 // is anything here" - the readout calls that Biting rather than Feeding, and this
 // turns the distinction into a number.
-long mouthOpen = 0, bitesConnected = 0;
+long mouthOpen = 0, bitesConnected = 0, creatureTicks = 0;
 
 for (int tick = 1; tick <= ticks; tick++)
 {
@@ -103,10 +103,10 @@ for (int tick = 1; tick <= ticks; tick++)
 
     foreach (int id in world.Living)
     {
+        creatureTicks++;
         var m = world.Get<GoL.Sim.Components.Mind>(id);
-        if (!m.Intent.Bite) continue;
-        mouthOpen++;
         if (m.BitThisTick) bitesConnected++;
+        if (m.Intent.Bite) mouthOpen++;
     }
     if (tick % report == 0) Report(world, tick, environment);
 }
@@ -120,11 +120,18 @@ Console.WriteLine($"world hash: {world.Hash():X16}");
 
 PrintBehaviour(histogram, chasing, fleeing, idle, total);
 
-if (mouthOpen > 0)
+if (creatureTicks > 0)
 {
+    // Bites are discrete, so counting "open-mouth ticks that landed" would just
+    // measure the chewing gap. What matters is how often a mouthful actually
+    // arrives, and how much of the time the mouth is open hopefully.
     Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-        "  {0,-40} {1,6:F2}%   ({2} of {3} open-mouth ticks)",
-        "bites that reached food", 100.0 * bitesConnected / mouthOpen, bitesConnected, mouthOpen));
+        "  {0,-40} {1,6:F2}", "bites landed per creature-minute",
+        (double)bitesConnected / creatureTicks * config.TicksPerSecond * 60.0));
+
+    Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+        "  {0,-40} {1,6:F1}%", "of the time with its mouth open",
+        100.0 * mouthOpen / creatureTicks));
 }
 
 if (switchSamples > 0)

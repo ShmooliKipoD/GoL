@@ -61,8 +61,22 @@ public static class Metabolism
     /// <summary>Eye-range multiplier while torpid. It may not see what is coming.</summary>
     public const float TorporVisionFactor = 0.5f;
 
-    /// <summary>Energy per second a bite draws from its target.</summary>
-    public const float BiteRate = 22f;
+    /// <summary>
+    /// Calories taken in one bite. A bite is an <b>event</b>, not a drain: the
+    /// creature takes a mouthful, swallows, and bites again.
+    /// <para>
+    /// It used to be a continuous 22/s, which meant a connecting tick credited about
+    /// 0.2 energy - a trickle invisible against a maximum in the hundreds, and the
+    /// reason a creature could plainly be eating while its energy only fell. A
+    /// mouthful moves the number.
+    /// </para>
+    /// </summary>
+    public const float BiteSize = 9f;
+
+    /// <summary>Seconds between bites. With <see cref="BiteSize"/> this comes to
+    /// roughly the old 22/s sustained, so eating is no faster - it is just no longer
+    /// spread so thin that it cannot be seen.</summary>
+    public const float BiteInterval = 0.4f;
 
     /// <summary>
     /// Least energy a plant must hold to be chosen as a bite target. Above the mere

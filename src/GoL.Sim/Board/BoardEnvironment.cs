@@ -115,6 +115,10 @@ public sealed class BoardEnvironment : IEnvironment, ISenseField
     public void ResolveBite(
         SimWorld world, Body body, Energy energy, Genome genome, Mind mind, float dt)
     {
+        // Chewing is counted here rather than a system away, so a bite is entirely
+        // described by the call that performs it.
+        if (mind.BiteCooldown > 0f) mind.BiteCooldown -= dt;
+
         float reach = body.Radius + genome.Trait(TraitAxis.MouthReach);
         float arc = genome.Trait(TraitAxis.MouthArc);
 
@@ -128,14 +132,18 @@ public sealed class BoardEnvironment : IEnvironment, ISenseField
         mind.BiteTarget = best;
         if (best < 0) return;
 
+        // Still chewing the last mouthful.
+        if (mind.BiteCooldown > 0f) return;
+
         var kind = _plants.KindAt(best);
 
-        float take = _plants.Consume(best, Metabolism.BiteRate * dt);
+        float take = _plants.Consume(best, Metabolism.BiteSize);
         if (take <= 0f) return;
 
         float digestibility = PlantSpecs.Digestibility(kind, genome);
         energy.Gain(take * digestibility);
 
+        mind.BiteCooldown = Metabolism.BiteInterval;
         mind.BitThisTick = true;
     }
 

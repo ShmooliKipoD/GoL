@@ -263,6 +263,47 @@ public class FeedingTests
         Assert.Equal(PlantKind.None, plants.KindAt(index));
     }
 
+    /// <summary>
+    /// A bite is an event, not a drain. One bite takes a mouthful and then the
+    /// creature chews - which is what makes eating visible, because a continuous
+    /// 22/s credited about 0.2 energy per tick against a maximum in the hundreds and
+    /// a creature could plainly be eating while its energy only fell.
+    /// </summary>
+    [Fact]
+    public void ABite_TakesAMouthful_ThenTheCreatureChews()
+    {
+        var config = new SimConfig { Seed = 31, WorldSize = 340f };
+        var lab = new LabEnvironment(config);
+        var world = new SimWorld(config, lab);
+
+        var plant = lab.AddPlant(new Vector2(108f, 100f), 35f);
+
+        var genome = Seed(31);
+        var mind = MakeMind(genome);
+        var body = new Body { Position = new Vector2(100f, 100f), Radius = 12f, Heading = 0f };
+        var energy = new Energy { Current = 0f, Maximum = 10000f };
+
+        float dt = 1f / 60f;
+        lab.ResolveBite(world, body, energy, genome, mind, dt);
+
+        float first = energy.Current;
+        float expected = Metabolism.BiteSize * genome.Trait(TraitAxis.DigestGrass);
+
+        Assert.Equal(expected, first, 3);
+        Assert.True(first > 1f, "a mouthful has to be big enough to see");
+
+        // Immediately after, it is chewing - more ticks take nothing.
+        for (int i = 0; i < 10; i++) lab.ResolveBite(world, body, energy, genome, mind, dt);
+        Assert.Equal(first, energy.Current, 3);
+
+        // Once the interval has passed, the next mouthful lands.
+        int ticks = (int)(Metabolism.BiteInterval / dt) + 2;
+        for (int i = 0; i < ticks; i++) lab.ResolveBite(world, body, energy, genome, mind, dt);
+
+        Assert.True(energy.Current > first + expected * 0.9f, "the next bite should land");
+        Assert.True(plant.Energy < 35f - Metabolism.BiteSize, "and the green should be going");
+    }
+
     private static int FindPlant(PlantGrid plants)
     {
         for (int i = 0; i < plants.Resolution * plants.Resolution; i++)

@@ -237,8 +237,13 @@ Reproduction needs all four of: the brain asking, age past `MatureAge`, energy a
 
 ## Eating
 
-A bite draws `BiteRate` energy per second from the target, and the eater absorbs
-`take × Digestibility(kind, genome)`. Both environments credit it through
+**A bite is an event, not a drain.** The creature takes a mouthful of
+`Metabolism.BiteSize` calories, chews for `BiteInterval`, and bites again; the eater
+absorbs `take × Digestibility(kind, genome)`. Sustained throughput comes to roughly
+what the old continuous 22/s did, so eating is no faster — but a continuous drain
+credited about **0.2 energy per tick** against a maximum in the hundreds, which is
+why a creature could plainly be eating while its energy only fell. A mouthful moves
+the number. Both environments credit it through
 `Energy.Gain`, which is the **only** way energy is ever added: it clamps to the
 maximum and records `LifetimeIntake` in the same place, so the intake readout cannot
 disagree with the energy it reports on. It also credits what was *absorbed* rather

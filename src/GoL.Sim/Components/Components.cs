@@ -80,7 +80,11 @@ public sealed class Energy
     {
         if (dt <= 0f) return;
 
-        const float smoothing = 2.5f;
+        // A long window on purpose. Bites are discrete now - a mouthful every
+        // BiteInterval - so a fast filter reads near zero between them and spikes on
+        // the tick one lands. Two seconds of memory reports what a creature is
+        // actually living on.
+        const float smoothing = 0.5f;
         float instant = IntakeThisTick / dt;
         IntakeRate += (instant - IntakeRate) * MathF.Min(1f, smoothing * dt);
     }
@@ -154,6 +158,11 @@ public sealed class Mind
     /// </para>
     /// </summary>
     public int BiteTarget = -1;
+
+    /// <summary>Seconds until this mouth can take another bite. A bite is an event,
+    /// so there has to be a gap between them - otherwise "chew" is just a drain
+    /// again, one tick at a time.</summary>
+    public float BiteCooldown;
 
     /// <summary>Recompiles after the genome changed in place. Normally a genome is
     /// fixed for a lifetime; the lab uses this to grant an attribute on demand.</summary>

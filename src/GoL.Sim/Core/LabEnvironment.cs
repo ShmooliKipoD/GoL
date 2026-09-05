@@ -110,6 +110,10 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
     public void ResolveBite(
         SimWorld world, Body body, Energy energy, Genome genome, Mind mind, float dt)
     {
+        // Chewing is counted here rather than a system away, so a bite is entirely
+        // described by the call that performs it.
+        if (mind.BiteCooldown > 0f) mind.BiteCooldown -= dt;
+
         float reach = body.Radius + genome.Trait(TraitAxis.MouthReach);
         float arc = genome.Trait(TraitAxis.MouthArc);
 
@@ -134,9 +138,13 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
         mind.BiteTarget = best?.Id ?? -1;
         if (best is null) return;
 
-        float take = MathF.Min(Metabolism.BiteRate * dt, best.Energy);
+        // Still chewing the last mouthful.
+        if (mind.BiteCooldown > 0f) return;
+
+        float take = MathF.Min(Metabolism.BiteSize, best.Energy);
         best.Energy -= take;
         energy.Gain(take * genome.Trait(TraitAxis.DigestGrass));
+        mind.BiteCooldown = Metabolism.BiteInterval;
         mind.BitThisTick = true;
 
         // Eaten greens are gone. One seeds elsewhere later so the arena cannot
