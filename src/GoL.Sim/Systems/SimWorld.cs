@@ -60,7 +60,10 @@ public sealed class SimWorld
                 new MoveAction(),
                 new TurnAction(),
                 new EatAction(),
-                new BreedAction()))
+                new BreedAction(),
+                new RestAction(),
+                new MarkAction(CreatureAction.ScentA),
+                new MarkAction(CreatureAction.ScentB)))
             .AddSystem(new EnergySystem(this))
             .AddSystem(new LifecycleSystem(this))
             .AddSystem(new ActionSystem(this))

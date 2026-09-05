@@ -134,11 +134,16 @@ load-bearing:
 | 1 | `FieldSystem` | Scent, fertility, plant growth, spatial index rebuild. First, so every creature perceives the same field state, and the index is rebuilt after the previous tick's movement but before this tick's sensing |
 | 2 | `SenseSystem` | Reads only |
 | 3 | `ThinkSystem` | Reads only |
-| 4 | `ActuateSystem` | **First writer.** Everything before it only read |
-| 5 | `FeedSystem` | After movement, so a creature bites from where it ended up |
-| 6 | `EnergySystem` | After feeding, so what it ate is credited before it is charged |
-| 7 | `LifecycleSystem` | Births and deaths, so entities are never created or destroyed mid-iteration |
-| 8 | `ActionSystem` | After lifecycle, so a birth is read from the tick stamp lifecycle just wrote rather than by re-deriving the reproduction predicate |
+| 4 | `ActionRunnerSystem` | **First writer.** Everything before it only read. Runs exactly one action per creature, which drives movement and biting together |
+| 5 | `EnergySystem` | After acting, so what it ate is credited before it is charged |
+| 6 | `LifecycleSystem` | Births and deaths, so entities are never created or destroyed mid-iteration |
+| 7 | `ActionSystem` | After lifecycle, so a birth is read from the tick stamp lifecycle just wrote rather than by re-deriving the reproduction predicate |
+
+`ActuateSystem` and `FeedSystem` were steps 4 and 5 until Step 3g. Splitting
+movement from biting meant nothing owned *eating*, so nothing was ever in a position
+to notice a creature biting at empty air. They are now one runner, and approaching
+food is part of the eating action rather than something the brain must arrange
+separately.
 
 The split that matters most: **sensing and thinking both complete before anything
 acts.** If creature 0 moved before creature 1 sensed, the run would depend on the

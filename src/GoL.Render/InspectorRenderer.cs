@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MonoGame.Extended;
 using GoL.Sim.Brains;
+using GoL.Sim.Acting;
 using GoL.Sim.Core;
 using GoL.Sim.Genetics;
 
@@ -143,8 +144,11 @@ public sealed class InspectorRenderer
         text.Draw("actions", new Vector2(x, y), Palette.Accent, Scale);
         y += lineHeight;
 
-        text.Draw("now: " + creature.ActionLabel, new Vector2(x, y),
-            behaviour.Active ? Palette.Warning : Palette.InkDim, Scale);
+        // The status, not just the name. A creature holding its mouth open at empty
+        // air used to read exactly like one that was feeding, and telling them apart
+        // by watching the energy number is what this line exists to replace.
+        text.Draw("now: " + creature.ActionLabelWithStatus, new Vector2(x, y),
+            StatusColour(creature), Scale);
         y += lineHeight * 1.5f;
 
         for (int i = 0; i < Actions.Count; i++)
@@ -235,9 +239,19 @@ public sealed class InspectorRenderer
             new RectangleF(at.X - 3f, at.Y - 2f, size.X + 6f, size.Y + 4f),
             Palette.Panel * 0.85f);
 
-        text.Draw(label, at,
-            creature.Behaviour.Active ? Palette.Warning : Palette.InkDim, Scale);
+        text.Draw(label, at, StatusColour(creature), Scale);
     }
+
+    /// <summary>Blocked reads dim, so it cannot be mistaken for a working action at
+    /// a glance; a finished one reads plain.</summary>
+    private static Color StatusColour(CreatureView creature) => !creature.Doing.Active
+        ? Palette.InkDim
+        : creature.ActionStatus switch
+        {
+            ActionStatus.Blocked => Palette.InkDim,
+            ActionStatus.Done => Palette.Ink,
+            _ => Palette.Warning,
+        };
 
     private static void DrawBar(SpriteBatch batch, Vector2 position, float width, float height, float fraction)
     {

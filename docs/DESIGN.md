@@ -716,3 +716,175 @@ not flicker between near-equal values but still yields to a decisive lead.
 `src/GoL.Sim/Board/BoardEnvironment.cs`, `src/GoL.Sim/Components/Components.cs`,
 `src/GoL.Sim/Systems/{ActionSystem,SenseSystem}.cs`, `tools/GoL.Headless/Program.cs`,
 `tests/GoL.Sim.Tests/{FeedingTests,CommitmentTests,ActionTests}.cs`.
+
+---
+
+## Step 3g — Actions become things a creature *does*
+
+**Problem.** The owner watched a creature bite with nothing in reach and gain
+nothing: *"I see the creature biting but I assume the green is out of reach, so zero
+energy is generated."* Underneath it was a structural gap — **nothing owned an
+action.** Execution was smeared across four systems (`ActuateSystem` did thrust, turn
+and scent, `FeedSystem` did biting, `LifecycleSystem` did breeding, `EnergySystem`
+applied torpor's discount) and `Intent` was eight loose values applied wherever each
+happened to be read. There was no place where "eating" existed as a thing with a
+beginning, a middle and an end, so no code was ever in a position to notice that the
+biting was achieving nothing.
+
+The owner's instruction was to clear all action execution and implement the actions
+back one at a time, checking each in the Creature Lab.
+
+### The two layers
+
+- **Primitives** — how a *body* moves: thrust and turn, with their existing easing.
+- **Actions** — what a *creature* is doing. These drive the primitives.
+
+| Action | Executing it means | Needs |
+|---|---|---|
+| **Move** | Travel on the current heading. Signed: positive advances, negative backs away | — |
+| **Turn** | Rotate. Signed: negative left, positive right | — |
+| **Eat** | Choose a green, **close the distance**, bite it out, finish | — |
+| **Breed** | Request a birth once age, cooldown and energy allow | — |
+| **Rest** | Hold torpor: cheap, nearly immobile, half-blind | `Torpor` |
+| **Mark** | Lay scent on channel A or B | `ScentGlandA` / `B` |
+| **Sprint** | A **modifier** on movement, not an action — there is no sprinting while standing still | `SprintGland` |
+
+Chase and flee stay one signed `Move`, and turn left/right one signed `Turn`, as
+established in Step 3c. `Sprint` keeps its place in the vocabulary — that vocabulary
+*is* the effector set — but gets no `ICreatureAction`; selecting it falls through to
+the movement it modifies. `SprintAction.cs` exists solely to say so, because an empty
+slot in the runner's table is indistinguishable from an unfinished one.
+
+### The contract
+
+```csharp
+enum ActionStatus { Running, Done, Blocked }
+
+interface ICreatureAction
+{
+    CreatureAction Id { get; }
+    bool CanStart(in ActionContext ctx);
+    ActionStatus Execute(in ActionContext ctx, float dt);
+}
+```
+
+`ActionContext` is a `readonly ref struct` like `SenseSubject` — one call's lifetime,
+never stored. The new `Doing` component holds what is running, its status, and where
+it is heading.
+
+**One action owns the body while it runs.** `Eat` steers *itself* toward its meal
+rather than delegating to `Move`; two actions sharing the body would be the
+creature-states problem arriving a step early.
+
+**`Doing` is the single source of truth for the readout.** `ActionSystem` used to
+*infer* the current action from the largest effector magnitude, with its own dwell and
+takeover margin, because nothing knew. Now something does. The dwell moved to the
+runner, where deciding whether to switch actions always belonged.
+
+### Eat steers by sight, not by an oracle
+
+`Eat` scans its own eye bins for `SeenKind.Plant` and heads for the nearest. It never
+asks the environment where the food is — an environment query would give a creature
+with terrible eyes exactly the same food-finding as one with excellent eyes, and
+vision would stop being something a lineage evolves.
+
+An eye reports a *direction and a range*, never an identity, so approach and biting
+are two different questions: `Doing.Target` holds **where to go** (a position, from
+sight) while `Mind.BiteTarget` keeps the existing **mouth-reach latch by id** that
+stops a creature nibbling whatever drifts closest.
+
+This draws the line the risk section of the plan named. An action may execute *what
+the brain chose* competently — closing on a green the creature already decided to eat
+is execution. Choosing *which* action, *when*, and *at what* stays the brain's.
+
+### Four freezes, found by instrumenting rather than reasoning
+
+Each left the creature motionless while the soak faithfully reported it as biting.
+Guessing at the cause failed three times; a probe printing per-creature action,
+status, target distance and speed found all of them in one run.
+
+1. **A finished action was never restarted.** `CanStart` ran only when the action *id*
+   changed, so an `Eat` that reported `Done` kept its slot, its per-meal progress
+   never reset, and it reported `Done` forever. One creature ate a single green and
+   stood over the empty ground for the rest of its life.
+2. **`Eat`'s "in reach but not chewable" branch returned `Running` without driving the
+   body.** An eye and a mouth are different shapes, so seeing a green is not the same
+   as being able to bite it. It now lines up if turning would help, and reports
+   `Blocked` when it would not.
+3. **`Blocked` from `Execute` did not fall through** — only a failed `CanStart` did. A
+   creature that could start eating but then could not proceed burned the whole tick
+   on nothing. Four of eight were stuck like that by tick 500.
+4. **A top-ranked action with no behaviour idled the creature** instead of falling
+   through. `Bite` wins selection about half the time, so with the table half-built the
+   population sat still wanting to bite at nothing: **idle 86.78%**, fixed to **0.05%**.
+
+Fault 3 sets an invariant now on the interface and in a test: **an action returning
+`Blocked` must not have moved the body**, because the fall-through action will move it
+and one tick must not be charged twice.
+
+Forcing an action deliberately does *not* fall through — watching a pinned action fail
+is the diagnostic the lab's force key exists for.
+
+### Wanting to, versus being able to
+
+`Locomotion.CanBear` now holds the three physiological breeding gates (old enough,
+past the cooldown, energy to spare); `CanReproduce` stays as the full conjunction.
+Selecting the `Reproduce` action *is* the wanting — the runner only picks it when that
+effector clears the deadband — so `BreedAction` asking again was the same question
+twice. It also left the lab unable to show a birth at all, since forcing an action
+stands in for the brain's wanting and a genome whose gate never opens could never be
+watched breeding. The board's numbers are byte-identical across the split.
+
+### Watching one action at a time
+
+The lab gained **`O`**, which cycles the forced action (off → Move → Turn → Bite → …)
+and names it in the status line. It is a lab affordance and nothing else: the board
+never forces an action.
+
+The inspector now shows the action **and its status** — `Biting - blocked`, not just
+`Biting`, dimmed so it cannot be mistaken at a glance. A creature holding its mouth
+open at empty air used to read exactly like one that was feeding.
+
+### Results
+
+Same two runs before and after, re-measured on this branch rather than quoted from
+earlier steps:
+
+| | before | after |
+|---|---|---|
+| bites / creature-minute, 1 creature seed 13 | 24.56 | **115.49** |
+| bites / creature-minute, 8 creatures seed 7 | 29.78 | **34.14** |
+| creature-ticks lived, 8 creatures seed 7 | 531 185 | **1 035 276** |
+| population @ 20 000, 8 creatures seed 7 | 84 | 74 |
+| idle | — | 0.02% |
+
+The population number is slightly down while aggregate life lived nearly doubled,
+which is the one to read: the run rises to 91 and settles rather than climbing
+monotonically. Held to 40 000 ticks it stays in the **73–89** band and reaches
+**generation 11**, so this is a carrying capacity rather than a slow collapse — and a
+better answer than the unbounded growth deferred from Step 3d.
+
+`Reproduce` fell from 23.07% of behaviour to 0.02%. That is the readout getting
+honest, not the creatures breeding less: it used to report the *gate* being open, and
+a creature is not reproducing for a quarter of its life. Births per run went up.
+
+**Verified.** 139 tests. New ones pin the complaint directly — `Eat` reports `Blocked`
+with nothing in sight, closes the distance and feeds, reports `Done` once the green is
+eaten out, and stays on one green rather than nibbling whatever is nearest — plus the
+two checks that would otherwise fail silently by looking exactly like the expected
+inert state: `Spawn` must attach `Doing`, and `LifecycleSystem` must keep calling
+`PublishLiving`.
+
+**Still true / next.** The brain was deliberately not touched. Moving the action model
+and the brain together would mean that when a creature misbehaves there is no way to
+tell which of the two is at fault. Next in the agreed arc: **creature states** (a
+creature can be in several at once — hungry *and* scared), then the **brain** itself,
+whose inputs become senses + last action + states and whose output becomes the action
+to take.
+
+**Files:** `src/GoL.Sim/Acting/*.cs` (new — contract and six actions),
+`src/GoL.Sim/Systems/{ActionRunnerSystem,ActionSystem,LifecycleSystem,SimWorld}.cs`
+(`ActuateSystem` and `FeedSystem` deleted), `src/GoL.Sim/Components/Components.cs`,
+`src/GoL.Sim/Core/{CreatureView,Locomotion}.cs`,
+`src/GoL.App/Screens/CreatureLabScreen.cs`, `src/GoL.Render/InspectorRenderer.cs`,
+`tests/GoL.Sim.Tests/ActionExecutionTests.cs`, `docs/ARCHITECTURE.md`.

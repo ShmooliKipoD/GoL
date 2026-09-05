@@ -391,4 +391,109 @@ public class ActionExecutionTests
         Assert.Equal(after, world.Population);
         Assert.False(doing.WantsBirth);
     }
+
+    // --- the latent actions ----------------------------------------------------
+
+    /// <summary>A genome with one attribute granted, so a latent action can run.</summary>
+    private static Genome SeedWith(LatentTraitId id, ulong seed = 1)
+    {
+        var rng = new Pcg32(seed);
+        var genome = Genome.CreateSeed(ref rng);
+
+        var prerequisite = LatentTraitCatalog.Get(id).Prerequisite;
+        if (prerequisite is not null) Mutator.Unlock(genome, prerequisite.Value, ref rng);
+
+        Mutator.Unlock(genome, id, ref rng);
+        return genome;
+    }
+
+    /// <summary>
+    /// A locked action must never run, however it is asked for. The lab can force
+    /// any action at all, so <c>CanStart</c> is the only thing standing between a
+    /// forced Rest and a creature resting without the attribute for it.
+    /// </summary>
+    [Fact]
+    public void ALatentAction_IsBlocked_WithoutItsAttribute()
+    {
+        var (world, _) = MakeLab();
+        int id = world.Spawn(Seed(), new Vector2(170f, 170f), 0f);
+
+        var doing = world.Get<Doing>(id);
+        doing.Forced = CreatureAction.Torpor;
+
+        Assert.False(world.Get<Genes>(id).Has(LatentTraitId.Torpor));
+
+        world.Step();
+
+        Assert.Equal(ActionStatus.Blocked, doing.Status);
+    }
+
+    /// <summary>
+    /// With the attribute unlocked, the action runs.
+    /// <para>
+    /// Several genomes are tried rather than one, and that is not flakiness-padding.
+    /// Marking's strength is the brain's scent effector, and <c>ReadIntent</c> clamps
+    /// a negative output to zero - so a genome whose scent neuron happens to sit
+    /// negative can hold the gland and still never lay a trail. That is a real
+    /// property of the model, not a defect in the action, and asserting against a
+    /// single seed would be asserting that one arbitrary brain wants to mark.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData(LatentTraitId.Torpor, CreatureAction.Torpor)]
+    [InlineData(LatentTraitId.ScentGlandA, CreatureAction.ScentA)]
+    [InlineData(LatentTraitId.ScentGlandB, CreatureAction.ScentB)]
+    public void ALatentAction_Runs_OnceItsAttributeIsUnlocked(
+        LatentTraitId trait, CreatureAction action)
+    {
+        bool ran = false;
+
+        for (ulong genomeSeed = 1; genomeSeed <= 12 && !ran; genomeSeed++)
+        {
+            var (world, _) = MakeLab();
+            int id = world.Spawn(SeedWith(trait, genomeSeed), new Vector2(170f, 170f), 0f);
+
+            var doing = world.Get<Doing>(id);
+            doing.Forced = action;
+
+            for (int i = 0; i < 300 && !ran; i++)
+            {
+                world.Step();
+                ran = doing.Action == action && doing.Status == ActionStatus.Running;
+            }
+        }
+
+        Assert.True(ran, $"{action} never ran for any genome despite {trait} being unlocked");
+    }
+
+    /// <summary>
+    /// Sprint is a modifier on movement, not an action - there is no such thing as
+    /// sprinting while standing still. It keeps its place in the vocabulary, because
+    /// that is the effector set and the brain does drive it, but it gets no
+    /// behaviour: selecting it falls through to the movement it modifies.
+    /// <para>
+    /// Worth pinning, because an empty slot in the runner's table is indistinguishable
+    /// from an unfinished one, and the obvious "fix" would be to write a SprintAction.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Sprint_HasNoActionOfItsOwn_AndFallsThroughToMovement()
+    {
+        var (world, _) = MakeLab();
+        int id = world.Spawn(SeedWith(LatentTraitId.SprintGland), new Vector2(170f, 170f), 0f);
+
+        var doing = world.Get<Doing>(id);
+        doing.Forced = CreatureAction.Sprint;
+
+        world.Step();
+
+        // Forced actions do not fall through, so a missing behaviour reads as blocked.
+        Assert.Equal(ActionStatus.Blocked, doing.Status);
+
+        // Unforced, the creature gets on with something it can actually do.
+        doing.Forced = null;
+        for (int i = 0; i < 120; i++) world.Step();
+
+        Assert.NotEqual(CreatureAction.Sprint, doing.Action);
+    }
 }

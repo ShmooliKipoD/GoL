@@ -174,6 +174,34 @@ public sealed class CreatureLabScreen : GolScreen
         // Force a mutation, so the trait system is demonstrable without waiting for
         // a rare unlock to happen on its own.
         if (kb.WasKeyPressed(Keys.U)) UnlockOne();
+
+        if (kb.WasKeyPressed(Keys.O)) CycleForcedAction();
+    }
+
+    /// <summary>
+    /// Pins the subject to one action, or releases it back to its brain.
+    /// <para>
+    /// <b>A lab affordance and nothing else</b> - the board never forces an action.
+    /// It exists because an unevolved brain simply never chooses the action you want
+    /// to watch, which makes checking actions one at a time impossible otherwise.
+    /// </para>
+    /// <para>
+    /// Forcing stands in for the brain's wanting, not for the creature's body: a
+    /// forced action still has to pass its own <c>CanStart</c>, so forcing Rest on a
+    /// creature without Torpor reads "blocked" rather than resting. Forced actions
+    /// also do not fall through to something else, because watching a pinned action
+    /// fail is the diagnostic this key is for.
+    /// </para>
+    /// </summary>
+    private void CycleForcedAction()
+    {
+        var doing = _world.Get<Doing>(_subjectId);
+
+        doing.Forced = doing.Forced is null
+            ? Actions.All[0]
+            : (int)doing.Forced.Value + 1 < Actions.Count
+                ? (CreatureAction)((int)doing.Forced.Value + 1)
+                : null;
     }
 
     private void UnlockOne()
@@ -308,7 +336,12 @@ public sealed class CreatureLabScreen : GolScreen
     {
         string state = _paused ? "PAUSED" : "running";
         string line1 = "V vision   N smell   M mouth   B brain   A attributes   K actions   G scent   F1 all";
-        string line2 = $"U new attribute   Space pause ({state})   . step   +/- zoom   F follow   R reset   Esc menu";
+        var forced = _world.Get<Doing>(_subjectId).Forced;
+        string driving = forced is null
+            ? "O force action"
+            : $"O forcing {Actions.Name(forced.Value).ToUpperInvariant()}";
+
+        string line2 = $"U new attribute   {driving}   Space pause ({state})   . step   +/- zoom   F follow   R reset   Esc menu";
 
         float lineHeight = Text.LineHeight(2f);
         float y = ViewHeight - lineHeight * 2 - 8f;

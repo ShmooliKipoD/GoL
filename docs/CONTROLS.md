@@ -38,12 +38,22 @@ is; the difference is deliberate.
 | `G` | Pheromone field |
 | `F1` | All overlays on/off |
 | `U` | Force an attribute unlock, so the trait system is demonstrable without waiting for a 0.4% chance |
+| `O` | Cycle the **forced action** — off, then each action in turn, named in the status line. Pins the creature to one behaviour so it can be watched in isolation, since an unevolved brain may simply never choose the one you want to see |
 | `Space` | Pause / resume |
 | `.` | Step one tick while paused |
 | `+` / `-`, wheel | Zoom |
 | `F` | Toggle follow-the-creature |
 | `R` | Reset with a fresh creature |
 | `Esc` | Back to the menu |
+
+Forcing stands in for the brain's *wanting*, not for the creature's *body*: a forced
+action still has to pass its own `CanStart`, so forcing Rest on a creature without the
+Torpor attribute reads `blocked` rather than resting. Forced actions also do not fall
+through to something else the way brain-chosen ones do — watching a pinned action fail
+is the whole point of the key.
+
+The actions panel shows the running action **and its status**: `Biting - blocked` is a
+creature with its mouth open at nothing, `Biting` one that is getting somewhere.
 
 ## The board
 
