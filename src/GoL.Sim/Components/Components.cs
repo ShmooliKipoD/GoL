@@ -226,10 +226,9 @@ public sealed class Behaviour
 
     public bool Can(CreatureAction action) => (AvailableMask & (1 << (int)action)) != 0;
 
-    /// <summary>What to call what it is doing right now.</summary>
-    public string Label() => Active
-        ? Actions.Label(Current, Values[(int)Current], Fed, Bred)
-        : Actions.IdleLabel;
+    // Label() lived here until Step 3g. CreatureView composes the label from Doing
+    // instead, because Doing knows what actually ran and this component only mirrors
+    // it - two places building the same string is how they drift apart.
 }
 
 /// <summary>

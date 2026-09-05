@@ -868,6 +868,50 @@ better answer than the unbounded growth deferred from Step 3d.
 honest, not the creatures breeding less: it used to report the *gate* being open, and
 a creature is not reproducing for a quarter of its life. Births per run went up.
 
+### The board, which nearly went unmeasured
+
+Every number above is `--lab`. The board has its **own** `ResolveBite`,
+`FindBiteTarget`/`StillBiting` and a DDA grid march for `RayCastPlant` where the lab
+brute-forces a list — and the execution layer was rewritten wholesale on top of both.
+The specific risk was the ray-cast reporting distance to a cell boundary rather than
+to the plant, which would land `Doing.Target` short and reproduce fault 2 exactly;
+its signature is `Bite` high with `in/s` near zero.
+
+It does not happen. Board, seed 42, 20 000 ticks, against the same run on `d60c330`:
+
+| | before | after |
+|---|---|---|
+| population @ 20 000 | 166, still climbing | 93, still climbing |
+| creature-ticks lived | 1 207 829 | 817 625 |
+| bites / creature-minute | 49.49 | **53.06** |
+| `in/s` at 20 000 | 1.96 | 1.76 |
+| idle | 0.56% | **0.32%** |
+| switches / creature-second | 0.62 | 1.42 |
+
+**Stated plainly: the board population is lower and grows more slowly than before.**
+Per-creature feeding is slightly better and intake is comparable and firmly positive,
+so this is not the failure mode above — but it is not a straight win either. The
+pre-strip board was the runaway growth deferred from Step 3d (166 and climbing, with
+vegetation carpeting the map), so a slower climb may be the healthier curve; that is a
+judgement, not a measurement, and the population-balance work is still owed.
+
+Switches per creature-second roughly doubled on the board (0.62 → 1.42) while
+`Reproduce` stopped occupying a fifth of the histogram. Both come from the same
+change: breeding is now a one-tick event rather than a permanently open gate, so what
+used to read as one long action is now many short ones with real actions in between.
+
+### Blocked is counted apart
+
+The soak's histogram counted a blocked tick as a running one, because `Doing.Active`
+stays true on a block — so the report every conclusion in this step was drawn from was
+missing the exact distinction the step exists to create. Four creatures frozen
+mid-approach hid inside a healthy-looking `Bite 78%` and needed a purpose-written probe
+to find; a blocked column would have shown them in the first soak.
+
+Split, and it is near zero everywhere — board `Bite` 0.08% blocked, lab 0.00% — which
+is the fall-through working. World hashes are unchanged across the change, so the new
+counter is inert.
+
 **Verified.** 139 tests. New ones pin the complaint directly — `Eat` reports `Blocked`
 with nothing in sight, closes the distance and feeds, reports `Done` once the green is
 eaten out, and stays on one green rather than nibbling whatever is nearest — plus the
@@ -887,4 +931,5 @@ to take.
 (`ActuateSystem` and `FeedSystem` deleted), `src/GoL.Sim/Components/Components.cs`,
 `src/GoL.Sim/Core/{CreatureView,Locomotion}.cs`,
 `src/GoL.App/Screens/CreatureLabScreen.cs`, `src/GoL.Render/InspectorRenderer.cs`,
-`tests/GoL.Sim.Tests/ActionExecutionTests.cs`, `docs/ARCHITECTURE.md`.
+`tests/GoL.Sim.Tests/ActionExecutionTests.cs`, `tools/GoL.Headless/Program.cs`,
+`docs/{ARCHITECTURE,CONTROLS}.md`.

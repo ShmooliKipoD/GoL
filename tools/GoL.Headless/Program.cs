@@ -80,7 +80,10 @@ int report = Math.Max(1, ticks / 10);
 // Creature-ticks spent on each action, plus the two signs of Move counted apart.
 // Accumulated over the whole run rather than sampled, so a rare action still shows.
 var histogram = new long[Actions.Count];
-long chasing = 0, fleeing = 0, idle = 0, total = 0;
+
+// Blocked ticks, counted apart. Doing.Active stays true on a block, so without this
+// a creature failing to eat is reported as one that is eating.
+var blockedHistogram = new long[Actions.Count];long chasing = 0, fleeing = 0, idle = 0, total = 0;
 
 // How often a creature changes what it is doing. "Its state fluctuates way too
 // fast" is otherwise an eyeball judgement; this makes it a number, and it is the
@@ -98,7 +101,7 @@ long mouthOpen = 0, bitesConnected = 0, creatureTicks = 0;
 for (int tick = 1; tick <= ticks; tick++)
 {
     world.Step();
-    Accumulate(world, histogram, ref chasing, ref fleeing, ref idle, ref total);
+    Accumulate(world, histogram, blockedHistogram, ref chasing, ref fleeing, ref idle, ref total);
     CountSwitches(world, ref previousAction, ref switches, ref switchSamples);
 
     foreach (int id in world.Living)
@@ -118,7 +121,7 @@ Console.WriteLine($"{ticks} ticks in {stopwatch.ElapsedMilliseconds} ms "
     + $"({ticks / Math.Max(1.0, stopwatch.Elapsed.TotalSeconds):F0} ticks/s)");
 Console.WriteLine($"world hash: {world.Hash():X16}");
 
-PrintBehaviour(histogram, chasing, fleeing, idle, total);
+PrintBehaviour(histogram, blockedHistogram, chasing, fleeing, idle, total);
 
 if (creatureTicks > 0)
 {
@@ -158,7 +161,8 @@ return 0;
 //
 // Read it with the failure modes in mind: ~100% idle, or an even spread across
 // every action, both mean the brains are not doing anything.
-static void PrintBehaviour(long[] histogram, long chasing, long fleeing, long idle, long total)
+static void PrintBehaviour(
+    long[] histogram, long[] blocked, long chasing, long fleeing, long idle, long total)
 {
     Console.WriteLine();
     Console.WriteLine($"behaviour over {total} creature-ticks");
@@ -178,8 +182,11 @@ static void PrintBehaviour(long[] histogram, long chasing, long fleeing, long id
             label += $" (chase {100.0 * chasing / total,5:F1}%  flee {100.0 * fleeing / total,5:F1}%)";
         }
 
+        // "running" and "blocked" side by side. A row that is mostly blocked is a
+        // creature repeatedly trying something it cannot do.
         Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
-            "  {0,-40} {1,6:F2}%", label, 100.0 * histogram[i] / total));
+            "  {0,-40} {1,6:F2}%  {2,6:F2}% blocked",
+            label, 100.0 * histogram[i] / total, 100.0 * blocked[i] / total));
     }
 
     Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
@@ -187,7 +194,7 @@ static void PrintBehaviour(long[] histogram, long chasing, long fleeing, long id
 }
 
 static void Accumulate(
-    SimWorld world, long[] histogram,
+    SimWorld world, long[] histogram, long[] blocked,
     ref long chasing, ref long fleeing, ref long idle, ref long total)
 {
     var living = world.Living;
@@ -198,6 +205,21 @@ static void Accumulate(
         total++;
 
         if (!behaviour.Active) { idle++; continue; }
+
+        // Blocked is counted apart from running.
+        //
+        // Doing.Active stays true on a block, so lumping them together reported a
+        // creature failing to eat as one that was eating - the exact distinction
+        // Step 3g exists to draw, missing from the report every conclusion in that
+        // step was drawn from. Four creatures frozen mid-approach hid inside a
+        // healthy-looking "Bite 78%" for an entire session; they would have been
+        // obvious as a blocked column.
+        if (world.Get<GoL.Sim.Components.Doing>(living[i]).Status
+            == GoL.Sim.Acting.ActionStatus.Blocked)
+        {
+            blocked[(int)behaviour.Current]++;
+            continue;
+        }
 
         histogram[(int)behaviour.Current]++;
 
