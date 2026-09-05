@@ -54,11 +54,11 @@ public sealed class SimWorld
             .AddSystem(new FieldSystem(this))
             .AddSystem(new SenseSystem(this))
             .AddSystem(new ThinkSystem())
-            // The action table is deliberately empty at this point in Step 3g:
-            // execution has been stripped and each action is being written back one
-            // at a time, verified in the Creature Lab as it lands. Creatures are
-            // inert until the first one is registered here.
-            .AddSystem(new ActionRunnerSystem(this))
+            // The action table, filling up one at a time through Step 3g. Each is
+            // written and verified in the Creature Lab before the next is added.
+            .AddSystem(new ActionRunnerSystem(this,
+                new MoveAction(),
+                new TurnAction()))
             .AddSystem(new EnergySystem(this))
             .AddSystem(new LifecycleSystem(this))
             .AddSystem(new ActionSystem(this))

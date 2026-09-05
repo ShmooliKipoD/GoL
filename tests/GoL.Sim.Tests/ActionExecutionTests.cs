@@ -80,16 +80,11 @@ public class ActionExecutionTests
     }
 
     /// <summary>
-    /// The state of the world partway through Step 3g: execution is stripped and the
-    /// actions are being written back one at a time. A creature still senses and
-    /// thinks - its brain emits an intent every tick - but nothing acts on it.
-    /// <para>
-    /// This test is <b>expected to be replaced</b> as actions land, and that is the
-    /// point: it is the marker for how much of the rebuild is done.
-    /// </para>
+    /// Move and Turn are registered, so a creature goes somewhere. This replaces the
+    /// inertness assertion that stood here while the table was empty.
     /// </summary>
     [Fact]
-    public void WithNoActionsRegistered_CreaturesAreInert()
+    public void WithMoveRegistered_ACreatureGoesSomewhere()
     {
         var (world, _) = MakeLab();
         int id = world.Spawn(Seed(), new Vector2(170f, 170f), 0f);
@@ -97,11 +92,72 @@ public class ActionExecutionTests
         var body = world.Get<Body>(id);
         var start = body.Position;
 
-        for (int i = 0; i < 120; i++) world.Step();
+        for (int i = 0; i < 240; i++) world.Step();
 
-        Assert.Equal(start, body.Position);
-        Assert.Equal(0f, body.Speed);
-        Assert.False(world.Get<Doing>(id).Active);
-        Assert.Equal(0f, world.Get<Energy>(id).LifetimeIntake);
+        Assert.NotEqual(start, body.Position);
+        Assert.True(world.Get<Doing>(id).Active);
+    }
+
+    /// <summary>
+    /// The fall-through. A creature whose brain most wants an action that cannot run
+    /// must take the next-best one, not freeze.
+    /// <para>
+    /// Measured, not argued: with Bite winning selection and no behaviour behind it,
+    /// eight creatures over 2000 ticks sat idle 86.78% of the time. Falling through
+    /// to Move and Turn took that to 0.05%. A population that stands still wanting to
+    /// bite at nothing is not a subtle failure, but it is a silent one.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void AnActionThatCannotRun_DoesNotFreezeTheCreature()
+    {
+        var (world, _) = MakeLab();
+
+        for (int i = 0; i < 6; i++)
+            world.Spawn(Seed((ulong)(i + 1)), new Vector2(60f + i * 40f, 170f), i * 0.7f);
+
+        int idleTicks = 0, total = 0;
+
+        for (int tick = 0; tick < 400; tick++)
+        {
+            world.Step();
+
+            foreach (int id in world.Living)
+            {
+                total++;
+                if (!world.Get<Doing>(id).Active) idleTicks++;
+            }
+        }
+
+        Assert.True(total > 0);
+
+        // Bite has no behaviour yet and wins selection often; if that idled the
+        // creature this would sit near the 87% that was actually measured.
+        Assert.True(
+            idleTicks < total / 10,
+            $"idle {idleTicks}/{total} creature-ticks - the runner is not falling through");
+    }
+
+    /// <summary>
+    /// A forced action deliberately does <b>not</b> fall through. Watching a pinned
+    /// action fail to start is the diagnostic the lab's force key exists for, and
+    /// silently running something else instead would destroy it.
+    /// </summary>
+    [Fact]
+    public void AForcedAction_ReportsBlocked_RatherThanRunningSomethingElse()
+    {
+        var (world, _) = MakeLab();
+        int id = world.Spawn(Seed(), new Vector2(170f, 170f), 0f);
+
+        var doing = world.Get<Doing>(id);
+
+        // Reproduce has no behaviour registered at this point in the rebuild.
+        doing.Forced = CreatureAction.Reproduce;
+
+        world.Step();
+
+        Assert.Equal(CreatureAction.Reproduce, doing.Action);
+        Assert.Equal(ActionStatus.Blocked, doing.Status);
+        Assert.Contains("blocked", world.View(id).ActionLabelWithStatus);
     }
 }

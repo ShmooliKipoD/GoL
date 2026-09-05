@@ -101,57 +101,122 @@ public sealed class ActionRunnerSystem : SimSystem
             // bug would have read as success.
             Actions.Read(genes.Genome, mind.Intent, _wants);
 
-            var chosen = Choose(doing);
-
-            if (chosen is not { } want || _table[(int)want] is not { } action)
-            {
-                doing.Clear();
-                continue;
-            }
-
-            bool switching = !doing.Active || doing.Action != want;
-
-            if (switching)
-            {
-                doing.Action = want;
-                doing.Active = true;
-                doing.HeldFor = 0f;
-                doing.HasTarget = false;
-
-                if (!action.CanStart(in ctx))
-                {
-                    // Reported, not hidden. A creature that cannot start eating must
-                    // read differently from one that is feeding - inferring which
-                    // from the screen is what this whole step exists to end.
-                    doing.Status = ActionStatus.Blocked;
-                    continue;
-                }
-            }
-
-            doing.Status = action.Execute(in ctx, dt);
-            doing.HeldFor += dt;
+            Run(in ctx, doing, dt);
         }
     }
 
-    /// <summary>Which action should have the body, or null for idle.</summary>
-    private CreatureAction? Choose(Doing doing)
+    /// <summary>
+    /// Picks an action and runs it, falling through to the next-best when the one it
+    /// wanted most cannot start.
+    /// <para>
+    /// The fall-through is the point. A creature whose brain says "eat" with nothing
+    /// in range must not freeze - moving is how it finds food in the first place.
+    /// Without this, a top-ranked action that cannot start left the creature idle,
+    /// and the whole population sat still wanting to bite at nothing.
+    /// </para>
+    /// </summary>
+    private void Run(in ActionContext ctx, Doing doing, float dt)
     {
-        // The lab pins an action so it can be watched in isolation. Nothing on the
-        // board ever sets this.
-        if (doing.Forced is { } forced) return forced;
+        // The lab pins an action so it can be watched in isolation, and pinning
+        // deliberately does NOT fall through: watching a forced Eat fail to start is
+        // exactly the diagnostic it exists for. Nothing on the board sets this.
+        if (doing.Forced is { } forced)
+        {
+            Start(in ctx, doing, forced, dt, fallThrough: false);
+            return;
+        }
 
         // An action still running keeps the body unless a challenger clearly beats
         // it, and for at least MinimumDwell. One that finished or could not start
-        // holds nothing - so the next tick picks freshly.
+        // holds nothing, so the next tick picks freshly.
         bool committed = doing.Active && doing.Status == ActionStatus.Running;
-
         var showing = committed ? doing.Action : (CreatureAction?)null;
 
-        if (!Actions.Current(_wants, out var current, showing)) return null;
+        if (!Actions.Current(_wants, out var want, showing))
+        {
+            doing.Clear();
+            return;
+        }
 
-        if (committed && current != doing.Action && doing.HeldFor < MinimumDwell)
-            return doing.Action;
+        if (committed && want != doing.Action && doing.HeldFor < MinimumDwell)
+            want = doing.Action;
 
-        return current;
+        Start(in ctx, doing, want, dt, fallThrough: true);
     }
+
+    /// <summary>Starts <paramref name="want"/>, or the best thing that can start
+    /// instead of it.</summary>
+    private void Start(
+        in ActionContext ctx, Doing doing, CreatureAction want, float dt, bool fallThrough)
+    {
+        int tried = 0;
+
+        while (true)
+        {
+            tried |= 1 << (int)want;
+
+            if (_table[(int)want] is { } action)
+            {
+                bool switching = !doing.Active || doing.Action != want;
+
+                if (switching)
+                {
+                    doing.Action = want;
+                    doing.Active = true;
+                    doing.HeldFor = 0f;
+                    doing.HasTarget = false;
+                }
+
+                if (!switching || action.CanStart(in ctx))
+                {
+                    doing.Status = action.Execute(in ctx, dt);
+                    doing.HeldFor += dt;
+                    return;
+                }
+
+                // Reported, not hidden. A creature that cannot start eating must read
+                // differently on screen from one that is feeding - having to infer
+                // which is what this whole step exists to end.
+                doing.Status = ActionStatus.Blocked;
+            }
+            else if (!fallThrough)
+            {
+                // No behaviour written for it yet. Still worth showing as blocked
+                // rather than as idle, so a half-built table is visible in the lab.
+                doing.Action = want;
+                doing.Active = true;
+                doing.Status = ActionStatus.Blocked;
+                return;
+            }
+
+            if (!fallThrough || !NextBest(tried, out want))
+            {
+                if (!doing.Active) doing.Clear();
+                return;
+            }
+        }
+    }
+
+    /// <summary>The largest remaining action not already tried.</summary>
+    private bool NextBest(int tried, out CreatureAction next)
+    {
+        next = default;
+        float best = Actions.Deadband;
+        bool found = false;
+
+        for (int i = 0; i < Actions.Count; i++)
+        {
+            if ((tried & (1 << i)) != 0) continue;
+
+            float magnitude = MathF.Abs(_wants[i]);
+            if (magnitude < best) continue;
+
+            best = magnitude;
+            next = (CreatureAction)i;
+            found = true;
+        }
+
+        return found;
+    }
+
 }
