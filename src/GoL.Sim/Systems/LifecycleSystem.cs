@@ -28,9 +28,10 @@ public sealed class LifecycleSystem : SimSystem
     private ComponentMapper<Vitals> _vitals = null!;
     private ComponentMapper<Genes> _genes = null!;
     private ComponentMapper<Mind> _mind = null!;
+    private ComponentMapper<Doing> _doing = null!;
 
     public LifecycleSystem(SimWorld world)
-        : base(Aspect.All(typeof(Body), typeof(Energy), typeof(Vitals), typeof(Genes), typeof(Mind)))
+        : base(Aspect.All(typeof(Body), typeof(Energy), typeof(Vitals), typeof(Genes), typeof(Mind), typeof(Doing)))
         => _world = world;
 
     public override void Initialize(IComponentMapperService mappers)
@@ -40,6 +41,7 @@ public sealed class LifecycleSystem : SimSystem
         _vitals = mappers.GetMapper<Vitals>();
         _genes = mappers.GetMapper<Genes>();
         _mind = mappers.GetMapper<Mind>();
+        _doing = mappers.GetMapper<Doing>();
     }
 
     public override void Update(GameTime gameTime)
@@ -63,19 +65,20 @@ public sealed class LifecycleSystem : SimSystem
             int generation = _genes.Get(id).Genome.Generation;
             if (generation > maxGeneration) maxGeneration = generation;
 
-            if (Locomotion.CanReproduce(
-                    _energy.Get(id), vitals, _genes.Get(id).Genome,
-                    _mind.Get(id).Intent, _world.SimTime))
-            {
-                _parents.Add(id);
-            }
+            // Whether to breed is BreedAction's call now, not this system's. It
+            // still performs the birth - creating entities mid-iteration is exactly
+            // what this system exists to defer - but it no longer decides.
+            if (_doing.Get(id).WantsBirth) _parents.Add(id);
         }
 
         // Births before deaths, so a parent that dies this tick still leaves issue -
         // and so a freed entity slot cannot be handed to its own offspring, which
         // would give the child its parent's random stream.
         foreach (int id in _parents)
+        {
             _world.Reproduce(id, _body.Get(id), _energy.Get(id), _vitals.Get(id), _genes.Get(id));
+            _doing.Get(id).WantsBirth = false;
+        }
 
         foreach (int id in _dead)
             _world.Kill(id, _body.Get(id), _energy.Get(id));

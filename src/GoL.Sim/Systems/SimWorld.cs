@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using MonoGame.Extended.ECS;
+using GoL.Sim.Acting;
 using GoL.Sim.Brains;
 using GoL.Sim.Components;
 using GoL.Sim.Core;
@@ -53,8 +54,11 @@ public sealed class SimWorld
             .AddSystem(new FieldSystem(this))
             .AddSystem(new SenseSystem(this))
             .AddSystem(new ThinkSystem())
-            .AddSystem(new ActuateSystem(this))
-            .AddSystem(new FeedSystem(this))
+            // The action table is deliberately empty at this point in Step 3g:
+            // execution has been stripped and each action is being written back one
+            // at a time, verified in the Creature Lab as it lands. Creatures are
+            // inert until the first one is registered here.
+            .AddSystem(new ActionRunnerSystem(this))
             .AddSystem(new EnergySystem(this))
             .AddSystem(new LifecycleSystem(this))
             .AddSystem(new ActionSystem(this))
@@ -111,6 +115,7 @@ public sealed class SimWorld
         entity.Attach(mind);
         entity.Attach(new Sight { Forward = new Eye(Vision.BinCount) });
         entity.Attach(new Behaviour { AvailableMask = Actions.AvailableMask(genome) });
+        entity.Attach(new Doing());
         entity.Attach(new RandomSource((ulong)Config.Seed, id, Tick));
 
         RecordUnlocks(genome);
@@ -185,7 +190,7 @@ public sealed class SimWorld
             id,
             entity.Get<Body>(), entity.Get<Energy>(), entity.Get<Vitals>(),
             entity.Get<Genes>(), entity.Get<Mind>(), entity.Get<Sight>(),
-            entity.Get<Behaviour>());
+            entity.Get<Behaviour>(), entity.Get<Doing>());
     }
 
     /// <summary>Random draws that belong to the world rather than to a creature -

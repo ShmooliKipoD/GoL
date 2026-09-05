@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using MonoGame.Extended.ECS;
 using MonoGame.Extended.ECS.Systems;
+using GoL.Sim.Acting;
 using GoL.Sim.Components;
 using GoL.Sim.Core;
 using GoL.Sim.Genetics;
@@ -27,9 +28,10 @@ public sealed class ActionSystem : SimSystem
     private ComponentMapper<Genes> _genes = null!;
     private ComponentMapper<Mind> _mind = null!;
     private ComponentMapper<Behaviour> _behaviour = null!;
+    private ComponentMapper<Doing> _doing = null!;
 
     public ActionSystem(SimWorld world)
-        : base(Aspect.All(typeof(Body), typeof(Vitals), typeof(Genes), typeof(Mind), typeof(Behaviour)))
+        : base(Aspect.All(typeof(Body), typeof(Vitals), typeof(Genes), typeof(Mind), typeof(Behaviour), typeof(Doing)))
         => _world = world;
 
     public override void Initialize(IComponentMapperService mappers)
@@ -39,19 +41,9 @@ public sealed class ActionSystem : SimSystem
         _genes = mappers.GetMapper<Genes>();
         _mind = mappers.GetMapper<Mind>();
         _behaviour = mappers.GetMapper<Behaviour>();
+        _doing = mappers.GetMapper<Doing>();
     }
 
-    /// <summary>
-    /// Least time an action stays on screen before another may replace it. A
-    /// creature cruising while turning gently has two effectors at nearly the same
-    /// magnitude, and whichever is momentarily larger changes many times a second -
-    /// so the label flickered over a creature that was plainly moving smoothly.
-    /// <para>
-    /// A bite that connects or a birth overrides it: those are events worth
-    /// interrupting for, and they are over in a tick if not shown at once.
-    /// </para>
-    /// </summary>
-    private const float MinimumDwell = 0.35f;
 
     public override void Update(GameTime gameTime)
     {
@@ -83,31 +75,19 @@ public sealed class ActionSystem : SimSystem
                 body.AngularVelocity, genome.Trait(TraitAxis.TurnRate),
                 behaviour.Values);
 
-            // Hand the action already showing back in, so it keeps its place unless
-            // something clearly beats it.
-            var showing = behaviour.Active ? behaviour.Current : (CreatureAction?)null;
-            var wasCurrent = behaviour.Current;
-            bool wasActive = behaviour.Active;
+            // Mirror what the runner actually ran. This used to infer the current
+            // action from the largest effector magnitude, with a dwell and a
+            // takeover margin, because nothing in the simulation knew. Doing knows,
+            // so the guess is gone - two things that each claimed to know the
+            // current action would eventually disagree, and a panel reporting Eat
+            // over a body executing Move is the worst kind of bug to chase.
+            var doing = _doing.Get(id);
 
-            bool nowActive = Actions.Current(behaviour.Values, out var nowCurrent, showing);
+            bool changed = doing.Active != behaviour.Active
+                || (doing.Active && doing.Action != behaviour.Current);
 
-            // Idle counts as a state here. A creature drifting around the deadband
-            // slips in and out of it constantly, and treating that as "no action"
-            // rather than as a change let the flicker straight back through.
-            bool changed = nowActive != wasActive || (nowActive && nowCurrent != wasCurrent);
-            bool salient = behaviour.Fed || behaviour.Bred;
-
-            if (changed && behaviour.HeldFor < MinimumDwell && !salient)
-            {
-                // Too soon. Keep showing what it was, and let the bars carry the
-                // detail this label is deliberately not trying to.
-                nowActive = wasActive;
-                nowCurrent = wasCurrent;
-                changed = false;
-            }
-
-            behaviour.Active = nowActive;
-            behaviour.Current = nowCurrent;
+            behaviour.Active = doing.Active;
+            behaviour.Current = doing.Action;
             behaviour.HeldFor = changed ? 0f : behaviour.HeldFor + dt;
         }
     }

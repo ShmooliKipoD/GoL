@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using GoL.Sim.Acting;
 using GoL.Sim.Brains;
 using GoL.Sim.Core;
 using GoL.Sim.Genetics;
@@ -229,6 +230,81 @@ public sealed class Behaviour
     public string Label() => Active
         ? Actions.Label(Current, Values[(int)Current], Fed, Bred)
         : Actions.IdleLabel;
+}
+
+/// <summary>
+/// What this creature is actually doing right now, as opposed to what its brain
+/// asked for.
+/// <para>
+/// This is the single source of truth for the current action. <see cref="Behaviour"/>
+/// used to <i>infer</i> it from whichever effector had the largest magnitude, because
+/// nothing in the simulation knew. Now something does, and a readout that guessed
+/// alongside a runner that knew would eventually disagree - the panel claiming
+/// <c>Eat</c> while the body executed <c>Move</c> is the worst kind of bug to chase.
+/// </para>
+/// </summary>
+public sealed class Doing
+{
+    /// <summary>The action running this tick. Only meaningful when <see cref="Active"/>.</summary>
+    public CreatureAction Action;
+
+    /// <summary>False when nothing is running - the idle state.</summary>
+    public bool Active;
+
+    /// <summary>How the last <c>Execute</c> went. Shown next to the action, because
+    /// a forced <c>Eat</c> with no green in range must not look on screen like one
+    /// that is feeding.</summary>
+    public ActionStatus Status;
+
+    /// <summary>Seconds the current action has been running. Reset when it changes.</summary>
+    public float HeldFor;
+
+    /// <summary>
+    /// Where the action is heading, in world space.
+    /// <para>
+    /// A <b>position, not an id</b>, and the split from <see cref="Mind.BiteTarget"/>
+    /// is deliberate. An eye reports a direction and a range; it has no idea what it
+    /// is looking at. So approach is by position, from sight, while biting stays by
+    /// id against the existing mouth-reach latch. Trying to make one field serve both
+    /// would mean either giving the eye an identity it does not have, or re-finding
+    /// the target every tick - which is the nibbling bug <see cref="Mind.BiteTarget"/>
+    /// was written to fix.
+    /// </para>
+    /// </summary>
+    public Vector2 Target;
+
+    /// <summary>Whether <see cref="Target"/> holds anything. Not a sentinel position:
+    /// the world is toroidal, so every coordinate is a legitimate destination.</summary>
+    public bool HasTarget;
+
+    /// <summary>An action pinned by the Creature Lab, overriding the brain.
+    /// <para>
+    /// <b>A lab affordance and nothing else.</b> The board never sets it. It exists
+    /// because an unevolved brain simply never chooses the action you want to watch,
+    /// which makes "implement them one by one, checking in the lab" impossible
+    /// otherwise.
+    /// </para></summary>
+    public CreatureAction? Forced;
+
+    /// <summary>
+    /// Set by <c>BreedAction</c> when every gate has passed, and cleared once the
+    /// birth happens.
+    /// <para>
+    /// A request rather than a direct call because entities cannot be created while
+    /// the ECS is iterating them - <c>LifecycleSystem</c> still performs the birth,
+    /// last in the tick. What moved out of that system is the <i>decision</i>.
+    /// </para>
+    /// </summary>
+    public bool WantsBirth;
+
+    public void Clear()
+    {
+        Active = false;
+        Status = ActionStatus.Blocked;
+        HeldFor = 0f;
+        HasTarget = false;
+        WantsBirth = false;
+    }
 }
 
 /// <summary>The eyes, and what they currently see.</summary>

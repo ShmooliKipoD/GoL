@@ -1,3 +1,4 @@
+using GoL.Sim.Acting;
 using GoL.Sim.Components;
 using GoL.Sim.Genetics;
 
@@ -21,7 +22,7 @@ public readonly struct CreatureView
 {
     public CreatureView(
         int id, Body body, Energy energy, Vitals vitals, Genes genes, Mind mind, Sight sight,
-        Behaviour behaviour)
+        Behaviour behaviour, Doing doing)
     {
         Id = id;
         Body = body;
@@ -31,6 +32,7 @@ public readonly struct CreatureView
         Mind = mind;
         Sight = sight;
         Behaviour = behaviour;
+        Doing = doing;
     }
 
     public int Id { get; }
@@ -41,6 +43,9 @@ public readonly struct CreatureView
     public Mind Mind { get; }
     public Sight Sight { get; }
     public Behaviour Behaviour { get; }
+
+    /// <summary>What is actually running. Authoritative - see <see cref="Components.Doing"/>.</summary>
+    public Doing Doing { get; }
 
     public Genome Genome => Genes.Genome;
     public Vector2 Position => Body.Position;
@@ -56,9 +61,26 @@ public readonly struct CreatureView
     public Intent LastIntent => Mind.Intent;
     public bool BitThisTick => Mind.BitThisTick;
 
-    /// <summary>What this creature is doing, as a name. "Idle" when nothing clears
-    /// the deadband.</summary>
-    public string ActionLabel => Behaviour.Label();
+    /// <summary>What this creature is doing, as a name. "Idle" when nothing is
+    /// running. Reads <see cref="Doing"/>, which knows, rather than re-deriving a
+    /// guess from the effector magnitudes.</summary>
+    public string ActionLabel => Doing.Active
+        ? Actions.Label(Doing.Action, Behaviour.Value(Doing.Action), Behaviour.Fed, Behaviour.Bred)
+        : Actions.IdleLabel;
+
+    /// <summary>How that action is going. Shown beside the label, because a forced
+    /// <c>Eat</c> with nothing in range must not look like one that is feeding.</summary>
+    public ActionStatus ActionStatus => Doing.Status;
+
+    /// <summary>The label with its status, as the panel shows it: "Biting - blocked".</summary>
+    public string ActionLabelWithStatus => !Doing.Active
+        ? Actions.IdleLabel
+        : Doing.Status switch
+        {
+            ActionStatus.Blocked => ActionLabel + " - blocked",
+            ActionStatus.Done => ActionLabel + " - done",
+            _ => ActionLabel,
+        };
 
     /// <summary>
     /// Energy per second this creature burns just existing, before movement. Paired
