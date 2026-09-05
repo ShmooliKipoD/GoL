@@ -82,10 +82,18 @@ int report = Math.Max(1, ticks / 10);
 var histogram = new long[Actions.Count];
 long chasing = 0, fleeing = 0, idle = 0, total = 0;
 
+// How often a creature changes what it is doing. "Its state fluctuates way too
+// fast" is otherwise an eyeball judgement; this makes it a number, and it is the
+// evidence that motor commitment actually did something.
+// Indexed by entity id, holding the previous action + 1 so 0 means "not seen yet".
+var previousAction = new int[1024];
+long switches = 0, switchSamples = 0;
+
 for (int tick = 1; tick <= ticks; tick++)
 {
     world.Step();
     Accumulate(world, histogram, ref chasing, ref fleeing, ref idle, ref total);
+    CountSwitches(world, ref previousAction, ref switches, ref switchSamples);
     if (tick % report == 0) Report(world, tick, environment);
 }
 
@@ -97,6 +105,13 @@ Console.WriteLine($"{ticks} ticks in {stopwatch.ElapsedMilliseconds} ms "
 Console.WriteLine($"world hash: {world.Hash():X16}");
 
 PrintBehaviour(histogram, chasing, fleeing, idle, total);
+
+if (switchSamples > 0)
+{
+    double perSecond = (double)switches / switchSamples * config.TicksPerSecond;
+    Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+        "  {0,-40} {1,6:F2}", "action switches per creature-second", perSecond));
+}
 
 // Population collapse is the normal first outcome of any energy tuning, so say so
 // plainly rather than reporting a clean run over an empty world.
@@ -162,6 +177,35 @@ static void Accumulate(
         {
             if (behaviour.Value(CreatureAction.Move) < 0f) fleeing++; else chasing++;
         }
+    }
+}
+
+/// <summary>
+/// Counts how often each creature's current action changes. A high number is the
+/// twitching: a brain output resting near a gate threshold flips it every tick, and
+/// the creature chatters between biting and turning instead of doing either.
+/// </summary>
+static void CountSwitches(SimWorld world, ref int[] previous, ref long switches, ref long samples)
+{
+    var living = world.Living;
+
+    for (int i = 0; i < living.Count; i++)
+    {
+        int id = living[i];
+        if (id >= previous.Length) Array.Resize(ref previous, Math.Max(id + 1, previous.Length * 2));
+
+        var behaviour = world.Get<GoL.Sim.Components.Behaviour>(id);
+
+        // Idle is a state like any other here - flipping in and out of it counts.
+        int current = behaviour.Active ? (int)behaviour.Current + 2 : 1;
+
+        if (previous[id] != 0)
+        {
+            samples++;
+            if (previous[id] != current) switches++;
+        }
+
+        previous[id] = current;
     }
 }
 
