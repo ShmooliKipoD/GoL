@@ -15,6 +15,14 @@ public sealed class LabPlant
     public float Energy = 35f;
     public float MaxEnergy = 35f;
     public bool Alive => Energy > 0.05f;
+
+    /// <summary>Simulation time this plant comes back, or -1 if it is not gone.
+    /// <para>
+    /// A consumed green used to reappear instantly, elsewhere, at full energy - so
+    /// nothing ever visibly ran out. It now stays gone for a while and returns as a
+    /// seedling that has to grow.
+    /// </para></summary>
+    public float RespawnAt = -1f;
 }
 
 /// <summary>
@@ -77,11 +85,23 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
     {
         DecayScent(dt);
 
-        // Only living plants regrow. This used to run over every plant in the list
-        // including stripped ones, so an eaten green silently came back from zero -
-        // the same zombie-green problem the board grid had.
         foreach (var plant in _plants)
         {
+            if (plant.RespawnAt >= 0f)
+            {
+                if (world.SimTime < plant.RespawnAt) continue;
+
+                // Back as a seedling somewhere new, not as a full plant in place.
+                plant.Position = new Vector2(
+                    _rng.NextFloat(0f, WorldSize), _rng.NextFloat(0f, WorldSize));
+                plant.Energy = plant.MaxEnergy * 0.15f;
+                plant.RespawnAt = -1f;
+                continue;
+            }
+
+            // Only living plants regrow. This used to run over every plant in the
+            // list including stripped ones, so an eaten green silently came back
+            // from zero - the same zombie-green problem the board grid had.
             if (!plant.Alive) continue;
             plant.Energy = MathF.Min(plant.MaxEnergy, plant.Energy + 1.2f * dt);
         }
@@ -93,10 +113,11 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
         float reach = body.Radius + genome.Trait(TraitAxis.MouthReach);
         float arc = genome.Trait(TraitAxis.MouthArc);
 
-        LabPlant? best = null;
+        // Finish what the mouth started, while it lasts and stays in reach.
+        LabPlant? best = Latched(mind.BiteTarget, body, reach, arc);
         float bestDistance = float.MaxValue;
 
-        foreach (var plant in _plants)
+        if (best is null) foreach (var plant in _plants)
         {
             if (plant.Energy < Metabolism.WorthBiting) continue;
 
@@ -110,6 +131,7 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
             if (distance < bestDistance) { bestDistance = distance; best = plant; }
         }
 
+        mind.BiteTarget = best?.Id ?? -1;
         if (best is null) return;
 
         float take = MathF.Min(Metabolism.BiteRate * dt, best.Energy);
@@ -117,24 +139,37 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
         energy.Gain(take * genome.Trait(TraitAxis.DigestGrass));
         mind.BitThisTick = true;
 
-        // Eaten greens are gone. A replacement seeds elsewhere so the arena cannot
+        // Eaten greens are gone. One seeds elsewhere later so the arena cannot
         // empty - the lab exists to demonstrate feeding, repeatedly.
-        if (!best.Alive) ReplacePlant(best);
+        if (!best.Alive)
+        {
+            best.Energy = 0f;
+            best.RespawnAt = world.SimTime + RespawnDelay;
+            mind.BiteTarget = -1;
+        }
     }
 
-    /// <summary>
-    /// Moves a consumed plant somewhere new, keeping the arena's plant count fixed.
-    /// <para>
-    /// Reuses the object rather than removing and adding, so the list length and id
-    /// order never change - the lab's queries walk it in id order, and anything
-    /// accumulated over that order has to stay reproducible.
-    /// </para>
+    /// <summary>Seconds a consumed green stays gone before one returns elsewhere.
+    /// Long enough that the arena visibly thins where a creature has been feeding.
     /// </summary>
-    private void ReplacePlant(LabPlant plant)
+    private const float RespawnDelay = 6f;
+
+    /// <summary>The latched plant, if it is still worth finishing and in reach.</summary>
+    private LabPlant? Latched(int id, Body body, float reach, float arc)
     {
-        plant.Position = new Vector2(
-            _rng.NextFloat(0f, WorldSize), _rng.NextFloat(0f, WorldSize));
-        plant.Energy = plant.MaxEnergy;
+        if (id < 0 || id >= _plants.Count) return null;
+
+        var plant = _plants[id];
+
+        // Any energy at all keeps the latch - WorthBiting governs what a mouth will
+        // pick, not whether it finishes what it started.
+        if (plant.Energy <= 0f) return null;
+
+        var offset = Offset(body.Position, plant.Position);
+        if (offset.Length() - plant.Radius > reach) return null;
+
+        float relative = Senses.WrapAngle(MathF.Atan2(offset.Y, offset.X) - body.Heading);
+        return MathF.Abs(relative) <= arc ? plant : null;
     }
 
     /// <summary>The lab leaves no corpse; carrion is a board concern.</summary>

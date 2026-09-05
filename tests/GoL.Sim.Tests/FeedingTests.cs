@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Numerics;
 using GoL.Sim.Board;
 using GoL.Sim.Components;
@@ -194,13 +195,17 @@ public class FeedingTests
         Assert.DoesNotContain(PlantSpecs.Seedable, s => s.Kind == PlantKind.Carrion);
     }
 
-    /// <summary>The lab must be able to demonstrate feeding more than once, so an
-    /// eaten green is replaced rather than simply removed.</summary>
+    /// <summary>
+    /// The lab must be able to demonstrate feeding more than once. Eaten greens stay
+    /// gone for a few seconds - that is the point, so the arena visibly thins where a
+    /// creature has been feeding - but they come back, so it cannot empty.
+    /// </summary>
     [Fact]
-    public void Lab_HoldsItsPlantCountAsGreensAreEaten()
+    public void Lab_RefillsAfterGreensAreEaten()
     {
         var config = new SimConfig { Seed = 5, WorldSize = 340f };
         var lab = new LabEnvironment(config);
+        var world = new SimWorld(config, lab);
         lab.SeedPlants(24);
 
         int before = lab.Plants.Count;
@@ -214,14 +219,22 @@ public class FeedingTests
         {
             var target = lab.Plants[p];
             var body = new Body { Position = target.Position, Radius = 6f, Heading = 0f };
+            mind.BiteTarget = -1;
 
             for (int i = 0; i < 400; i++)
-                lab.ResolveBite(null!, body, energy, genome, mind, 1f / 60f);
+                lab.ResolveBite(world, body, energy, genome, mind, 1f / 60f);
         }
 
+        Assert.True(energy.LifetimeIntake > 0f, "the creature must actually have eaten");
+
+        int eaten = lab.Plants.Count(p => !p.Alive);
+        Assert.True(eaten > 0, "greens that were eaten out must actually be gone for a while");
+
+        // Well past the respawn delay.
+        for (int i = 0; i < 1200; i++) world.Step();
+
         Assert.Equal(before, lab.Plants.Count);
-        Assert.All(lab.Plants, p => Assert.True(p.Energy > 0f, "the arena must not empty"));
-        Assert.True(energy.LifetimeIntake > 0f, "and the creature must actually have eaten");
+        Assert.All(lab.Plants, p => Assert.True(p.Alive, "the arena must not stay empty"));
     }
 
     /// <summary>

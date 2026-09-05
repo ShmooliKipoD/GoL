@@ -259,6 +259,33 @@ A plant that has exhausted the soil under it **dies off**, reusing its own
 `MinFertility` as the line. Without that, nothing removes a plant except being
 eaten, and vegetation only ever spreads.
 
+### Motor commitment
+
+Effector gates are **Schmitt triggers**, not bare thresholds: a gate opens above 0.5
+and stays open until the output falls below 0.2. Without the gap, a brain output
+resting near the threshold flips it every tick and the creature flutters its mouth
+sixty times a second instead of taking a bite — measured at **8.76 changes of action
+per creature-second** in the lab before this, 3.9 after.
+
+`Reproduce` is hysteretic too, which was worth checking rather than assuming: it
+feeds `CanReproduce`, so a latched gate could in principle mean breeding every
+cooldown forever. Measured on the board it makes no difference (149 against 146 by
+tick 12 000), because a birth still has to pass age, cooldown and an energy
+threshold, and an open gate creates none of those.
+
+Turning **eases** toward its target the way speed already did. A body cannot reverse
+its turn within a sixtieth of a second, and that instant reversal was where the
+visible twitch came from.
+
+The mouth **latches onto the plant it started**, kept in `Mind.BiteTarget`, and holds
+it while it lasts and stays in reach. `Metabolism.WorthBiting` governs what a mouth
+will *pick*, not whether it finishes — a latch that let go at the threshold would
+leave a stub behind to regrow, which is the opposite of eating a green out.
+
+All three are properties of a **body**, not of a plan. Nothing here steers a creature
+toward food: pursuing what it can see remains something evolution has to discover,
+and an unevolved genome will still sit and chew on nothing.
+
 ### Density is the lever, not per-plant value
 
 What a creature experiences is how *often* it finds food, not how fat each morsel

@@ -50,7 +50,9 @@ public sealed class InspectorRenderer
             new Vector2(x, y), Palette.InkDim, Scale);
         y += lineHeight;
 
-        text.Draw($"energy {creature.Energy.Current:0}/{creature.Energy.Maximum:0}",
+        // One decimal, because a good bite moves this by a fraction of a unit out of
+        // a maximum in the hundreds - as a whole number it simply looked frozen.
+        text.Draw($"energy {creature.Energy.Current:0.0}/{creature.Energy.Maximum:0}",
             new Vector2(x, y), Palette.Ink, Scale);
         y += lineHeight;
 

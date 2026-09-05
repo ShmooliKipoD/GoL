@@ -143,6 +143,18 @@ public sealed class Mind
     /// being open. Cleared at the start of each tick.</summary>
     public bool BitThisTick;
 
+    /// <summary>
+    /// What the mouth is currently working on: a grid cell on the board, a plant id
+    /// in the lab. <b>-1 for nothing</b>, and that initialiser is load-bearing - an
+    /// int defaults to 0, which is a perfectly valid index in both, so every newborn
+    /// would otherwise start latched onto whatever occupies cell zero.
+    /// <para>
+    /// Without this the mouth re-picked the nearest plant every tick, so a creature
+    /// nibbled whatever drifted closest instead of finishing a meal.
+    /// </para>
+    /// </summary>
+    public int BiteTarget = -1;
+
     /// <summary>Recompiles after the genome changed in place. Normally a genome is
     /// fixed for a lifetime; the lab uses this to grant an attribute on demand.</summary>
     public void Rebuild(Genome genome)

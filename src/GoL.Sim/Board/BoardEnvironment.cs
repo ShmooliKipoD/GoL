@@ -118,7 +118,14 @@ public sealed class BoardEnvironment : IEnvironment, ISenseField
         float reach = body.Radius + genome.Trait(TraitAxis.MouthReach);
         float arc = genome.Trait(TraitAxis.MouthArc);
 
-        int best = FindBiteTarget(body, reach, arc);
+        // Stay on the plant this mouth already started, while it lasts and stays in
+        // reach. Re-picking the nearest every tick made a creature nibble whatever
+        // drifted closest instead of eating one green out.
+        int best = StillBiting(mind.BiteTarget, body, reach, arc)
+            ? mind.BiteTarget
+            : FindBiteTarget(body, reach, arc);
+
+        mind.BiteTarget = best;
         if (best < 0) return;
 
         var kind = _plants.KindAt(best);
@@ -130,6 +137,25 @@ public sealed class BoardEnvironment : IEnvironment, ISenseField
         energy.Gain(take * digestibility);
 
         mind.BitThisTick = true;
+    }
+
+    /// <summary>Whether a latched target is still a plant worth finishing.</summary>
+    private bool StillBiting(int index, Body body, float reach, float arc)
+    {
+        if (index < 0) return false;
+        if (_plants.KindAt(index) == PlantKind.None) return false;
+
+        // Any energy at all keeps the latch, not WorthBiting. That threshold is
+        // about not *choosing* scraps; abandoning a plant partway would leave a
+        // stub behind to regrow, which is the opposite of eating a green out.
+        if (_plants.EnergyAt(index) <= 0f) return false;
+
+        var offset = Offset(body.Position, _plants.CentreOf(index));
+        float distance = offset.Length() - PlantSpecs.Get(_plants.KindAt(index)).Radius;
+        if (distance > reach) return false;
+
+        float relative = Senses.WrapAngle(MathF.Atan2(offset.Y, offset.X) - body.Heading);
+        return MathF.Abs(relative) <= arc;
     }
 
     /// <summary>Nearest plant inside the mouth arc, or -1.</summary>

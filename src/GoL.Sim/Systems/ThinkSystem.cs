@@ -38,9 +38,10 @@ public sealed class ThinkSystem : SimSystem
                 mind.Sensors.AsSpan(0, mind.Brain.SensorCount),
                 mind.Effectors.AsSpan(0, mind.Brain.EffectorCount));
 
+            // Last tick's decision goes in, so the gates can hold what they opened.
             mind.Intent = Locomotion.ReadIntent(
                 _genes.Get(id).Genome, mind.Layout,
-                mind.Effectors.AsSpan(0, mind.Brain.EffectorCount));
+                mind.Effectors.AsSpan(0, mind.Brain.EffectorCount), mind.Intent);
         }
     }
 }

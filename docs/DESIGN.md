@@ -565,3 +565,81 @@ the new one.
 `src/GoL.Sim/SimConfig.cs`, `src/GoL.Render/InspectorRenderer.cs`,
 `src/GoL.App/Screens/CreatureLabScreen.cs`, `tools/GoL.Headless/Program.cs`,
 `tests/GoL.Sim.Tests/{FeedingTests,BoardTests}.cs`.
+
+---
+
+## 8. Step 3e — Motor commitment
+
+**Problem.** In the lab the creature bit greens without energy visibly rising, and
+its state *"fluctuates way too fast — if it detects a green it rapidly switches
+between bite and move left/right"*.
+
+One problem, not two. Three structural causes, all confirmed in code: gates were bare
+thresholds re-evaluated every tick, so an output resting near 0.5 chattered at 60 Hz;
+turning was applied **instantly** while speed was eased; and there was no bite target
+memory at all, so each tick re-picked the nearest plant. A bite therefore lasted about
+one tick and credited ~0.2 energy before the creature turned away.
+
+**The metric landed first, deliberately.** "Fluctuates too fast" is an eyeball
+judgement until it is a number, so the soak runner gained an *action switches per
+creature-second* column and was committed on its own, with the baseline recorded
+before any fix: **8.76/s in the lab**, 1.83/s on the board. Shipping the metric with
+the fix would have left nothing to compare against — the same reason the population
+trajectory was captured before Step 3d.
+
+**The fix is motor commitment, not scripted behaviour.** Schmitt-trigger gates
+(open 0.5, close 0.2), turning eased like speed, and a `Mind.BiteTarget` latch that
+keeps the plant a mouth started on. All three are properties of a body; the brain
+still decides everything. A hard "lock on and pursue until finished" was considered
+and rejected — it would script foraging rather than evolve it, and a "good forager"
+genome would stop meaning anything.
+
+Two findings came out of building it:
+
+- **`Reproduce` hysteresis was checked rather than assumed.** It feeds
+  `CanReproduce`, so a latched gate could have meant breeding every cooldown forever.
+  Measured: 149 against 146 by tick 12 000 — no difference, because a birth still has
+  to pass age, cooldown and an energy threshold. The prediction that it would roughly
+  double the population was simply wrong, and the comment in the code now records the
+  measurement instead of the guess.
+- **`WorthBiting` must not govern the latch.** The first version abandoned a plant at
+  1.0 energy, leaving a stub to regrow — the opposite of eating a green out. That
+  threshold is about not *choosing* scraps; finishing is unconditional.
+
+**Results.** Lab, same seed and settings:
+
+| | Before | After |
+|---|---|---|
+| Action switches / creature-second | 8.76 | **3.93** |
+| Intake at tick 2000 | 0.19/s | **1.07/s** |
+| Net at tick 2000 | −0.73 | **+0.16** |
+| Population / generation at 20 000 | 75 / gen 4 | **116 / gen 6** |
+
+Creatures now feed *before* selection has taught them to, which is the difference
+between a population that has to get lucky and one that can improve. Board switches
+fell 1.83 → 0.80 with no regression.
+
+**Also:** energy prints one decimal, because a good bite moves it by a fraction of a
+unit out of a maximum in the hundreds and as a whole number it simply looked frozen.
+A consumed lab green now stays gone for six seconds and returns elsewhere as a
+seedling, rather than reappearing instantly at full energy — which was why nothing
+ever appeared to run out.
+
+**What this does not fix, and was said in advance.** Nothing here steers a creature
+toward food. Turning merely stops being instantaneous; an unevolved genome that
+outputs near-zero thrust will still sit still and chew on nothing, and the lab's
+single random creature often does exactly that. Pursuing visible food is precisely
+what the soft approach leaves for evolution to find. If the wandering is itself the
+complaint, the answer is the hard target lock that was set aside.
+
+**Verified.** 119 tests, up from 112. New ones pin that a gate near the threshold
+stops chattering but still closes when the brain lets go, that turning approaches its
+target over several ticks and still reaches it, that a fresh `Mind` is not latched
+onto cell zero, that a bite keeps its plant while a closer one is in reach, and that
+a creature parked beside a green takes the whole plant. Two existing tests encoded
+the old contract and were updated.
+
+**Files:** `src/GoL.Sim/Core/{Locomotion,LabEnvironment}.cs`,
+`src/GoL.Sim/Systems/ThinkSystem.cs`, `src/GoL.Sim/Components/Components.cs`,
+`src/GoL.Sim/Board/BoardEnvironment.cs`, `src/GoL.Render/InspectorRenderer.cs`,
+`tools/GoL.Headless/Program.cs`, `tests/GoL.Sim.Tests/{CommitmentTests,FeedingTests}.cs`.
