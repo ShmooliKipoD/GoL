@@ -35,6 +35,14 @@ public interface ICreatureAction
     /// so a creature is never reported as doing something it cannot do.</summary>
     bool CanStart(in ActionContext ctx);
 
-    /// <summary>Advances the action by one step.</summary>
+    /// <summary>
+    /// Advances the action by one step.
+    /// <para>
+    /// <b>An action that returns <see cref="ActionStatus.Blocked"/> must not have
+    /// moved the body.</b> The runner falls through to the next-best action on a
+    /// block, and that one will drive the body itself - two actions moving one
+    /// creature in a single tick would charge it for the movement twice.
+    /// </para>
+    /// </summary>
     ActionStatus Execute(in ActionContext ctx, float dt);
 }

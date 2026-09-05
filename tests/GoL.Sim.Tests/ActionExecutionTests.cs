@@ -160,4 +160,148 @@ public class ActionExecutionTests
         Assert.Equal(ActionStatus.Blocked, doing.Status);
         Assert.Contains("blocked", world.View(id).ActionLabelWithStatus);
     }
+
+    // --- Eat -------------------------------------------------------------------
+
+    /// <summary>Puts the subject at a known place with a forced action, so a single
+    /// behaviour can be watched without waiting for an unevolved brain to pick it.</summary>
+    private static (SimWorld World, LabEnvironment Lab, int Id, Doing Doing) Subject(
+        Vector2 at, float heading = 0f, int seed = 5)
+    {
+        var (world, lab) = MakeLab(seed);
+        int id = world.Spawn(Seed(), at, heading);
+        var doing = world.Get<Doing>(id);
+        doing.Forced = CreatureAction.Bite;
+        return (world, lab, id, doing);
+    }
+
+    /// <summary>
+    /// <b>The complaint, pinned as a contract.</b> The owner watched a creature bite
+    /// with nothing in reach and gain nothing, while the readout called it feeding.
+    /// An empty arena is the sharpest version of that: there is nothing to eat
+    /// anywhere, and eating must say so rather than run forever.
+    /// </summary>
+    [Fact]
+    public void Eat_WithNothingInSight_ReportsBlocked()
+    {
+        var (world, _, id, doing) = Subject(new Vector2(170f, 170f));
+
+        world.Step();
+
+        Assert.Equal(CreatureAction.Bite, doing.Action);
+        Assert.Equal(ActionStatus.Blocked, doing.Status);
+        Assert.Equal(0f, world.Get<Energy>(id).LifetimeIntake);
+
+        // And it must not read like feeding.
+        Assert.Contains("blocked", world.View(id).ActionLabelWithStatus);
+    }
+
+    /// <summary>
+    /// Approaching is part of eating. This is what makes biting out of reach
+    /// impossible rather than merely discouraged: the creature closes the distance
+    /// itself instead of the brain having to arrange it separately.
+    /// </summary>
+    [Fact]
+    public void Eat_ClosesTheDistance_ThenFeeds()
+    {
+        var start = new Vector2(120f, 170f);
+        var (world, lab, id, _) = Subject(start);
+
+        // Straight ahead - the creature is heading along +X - and well beyond any
+        // mouth, so it has to travel.
+        var plant = lab.AddPlant(new Vector2(180f, 170f));
+
+        var body = world.Get<Body>(id);
+        var energy = world.Get<Energy>(id);
+
+        float reach = body.Radius + world.Get<Genes>(id).Trait(TraitAxis.MouthReach);
+        Assert.True(60f > reach, "the plant must start out of reach or this proves nothing");
+
+        for (int i = 0; i < 600; i++) world.Step();
+
+        float closed = lab.Offset(body.Position, plant.Position).Length();
+
+        Assert.True(closed < 60f, $"never closed on the green - still {closed:F1} away");
+        Assert.True(energy.LifetimeIntake > 0f, "closed the distance but never ate");
+    }
+
+    /// <summary>
+    /// Eating ends. A green has a fixed number of calories, and when they are gone
+    /// the action is finished rather than continuing to work an empty patch.
+    /// </summary>
+    [Fact]
+    public void Eat_ReportsDone_OnceTheGreenIsEatenOut()
+    {
+        var (world, lab, id, doing) = Subject(new Vector2(160f, 170f));
+
+        // Small enough that a few mouthfuls finish it, and already in reach.
+        var plant = lab.AddPlant(new Vector2(172f, 170f), energy: Metabolism.BiteSize * 2f);
+
+        bool sawDone = false;
+
+        for (int i = 0; i < 600 && !sawDone; i++)
+        {
+            world.Step();
+            if (doing.Status == ActionStatus.Done) sawDone = true;
+        }
+
+        Assert.True(sawDone, "ate a green out and never reported Done");
+        Assert.False(plant.Alive);
+        Assert.True(world.Get<Energy>(id).LifetimeIntake > 0f);
+    }
+
+    /// <summary>
+    /// A meal is not abandoned partway. Re-picking the nearest green every tick made
+    /// a creature nibble whatever drifted closest and leave stubs behind to regrow,
+    /// which is the opposite of eating one out.
+    /// </summary>
+    [Fact]
+    public void Eat_StaysOnOneGreen_RatherThanNibblingWhateverIsNearest()
+    {
+        var (world, lab, id, _) = Subject(new Vector2(160f, 170f));
+
+        var first = lab.AddPlant(new Vector2(171f, 170f));
+        var second = lab.AddPlant(new Vector2(173f, 172f));
+
+        var mind = world.Get<Mind>(id);
+
+        // Run until something is latched, then confirm it stays latched while it lasts.
+        for (int i = 0; i < 120 && mind.BiteTarget < 0; i++) world.Step();
+        Assert.True(mind.BiteTarget >= 0, "never latched onto a green at all");
+
+        int latched = mind.BiteTarget;
+        var target = latched == first.Id ? first : second;
+
+        for (int i = 0; i < 60; i++)
+        {
+            world.Step();
+            if (!target.Alive) break;
+            Assert.Equal(latched, mind.BiteTarget);
+        }
+    }
+
+    /// <summary>
+    /// An action that returns <see cref="ActionStatus.Blocked"/> must not have moved
+    /// the body: the runner falls through on a block and the next action drives, so a
+    /// block that also moved would charge the creature twice for one tick.
+    /// <para>
+    /// Not a hypothetical. Eat's "in reach but not chewable" branch returned without
+    /// driving <i>and</i> without reporting a block, which froze four of eight
+    /// creatures solid by tick 500 while the soak reported them as biting.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Eat_BlockedInAnEmptyArena_LeavesTheBodyAlone()
+    {
+        var (world, _, id, doing) = Subject(new Vector2(170f, 170f));
+
+        var body = world.Get<Body>(id);
+        body.Speed = 12f;
+
+        float before = body.Speed;
+        world.Step();
+
+        Assert.Equal(ActionStatus.Blocked, doing.Status);
+        Assert.Equal(before, body.Speed);
+    }
 }

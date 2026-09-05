@@ -58,7 +58,8 @@ public sealed class SimWorld
             // written and verified in the Creature Lab before the next is added.
             .AddSystem(new ActionRunnerSystem(this,
                 new MoveAction(),
-                new TurnAction()))
+                new TurnAction(),
+                new EatAction()))
             .AddSystem(new EnergySystem(this))
             .AddSystem(new LifecycleSystem(this))
             .AddSystem(new ActionSystem(this))

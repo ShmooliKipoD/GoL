@@ -273,6 +273,11 @@ public sealed class Doing
     /// </summary>
     public Vector2 Target;
 
+    /// <summary>How many bites this action has landed. Zero on a meal that has not
+    /// started; what tells <c>EatAction</c> the difference between "the plant is
+    /// eaten" and "there was never anything there".</summary>
+    public int Progress;
+
     /// <summary>Whether <see cref="Target"/> holds anything. Not a sentinel position:
     /// the world is toroidal, so every coordinate is a legitimate destination.</summary>
     public bool HasTarget;
@@ -304,6 +309,7 @@ public sealed class Doing
         HeldFor = 0f;
         HasTarget = false;
         WantsBirth = false;
+        Progress = 0;
     }
 }
 

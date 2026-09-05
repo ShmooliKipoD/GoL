@@ -157,7 +157,18 @@ public sealed class ActionRunnerSystem : SimSystem
 
             if (_table[(int)want] is { } action)
             {
-                bool switching = !doing.Active || doing.Action != want;
+                // A fresh start, and CanStart gates every one of them.
+                //
+                // Note the third clause. Comparing only the action id was a bug with
+                // an unusually quiet failure: an Eat that reported Done kept its slot,
+                // so the next tick "continued" it rather than starting it, its
+                // per-meal progress never reset, and it reported Done again forever.
+                // The creature ate one green and then stood over the empty ground for
+                // the rest of its life, still reporting Bite. A finished action is
+                // finished - running it again is a new start.
+                bool switching = !doing.Active
+                    || doing.Action != want
+                    || doing.Status != ActionStatus.Running;
 
                 if (switching)
                 {
@@ -169,15 +180,29 @@ public sealed class ActionRunnerSystem : SimSystem
 
                 if (!switching || action.CanStart(in ctx))
                 {
-                    doing.Status = action.Execute(in ctx, dt);
+                    var status = action.Execute(in ctx, dt);
+                    doing.Status = status;
                     doing.HeldFor += dt;
-                    return;
-                }
 
-                // Reported, not hidden. A creature that cannot start eating must read
-                // differently on screen from one that is feeding - having to infer
-                // which is what this whole step exists to end.
-                doing.Status = ActionStatus.Blocked;
+                    // Blocked from Execute falls through exactly like a failed
+                    // CanStart. Only CanStart used to, which left a creature that
+                    // could start eating but then could not proceed - a green in
+                    // reach that turned out not to be chewable - burning the whole
+                    // tick on nothing. It stood still holding a stale speed while
+                    // the soak faithfully reported it as biting.
+                    //
+                    // This is why an action that returns Blocked must not have
+                    // driven the body: whatever runs next will drive it, and two
+                    // actions moving one creature in one tick would charge it twice.
+                    if (status != ActionStatus.Blocked) return;
+                }
+                else
+                {
+                    // Reported, not hidden. A creature that cannot start eating must
+                    // read differently on screen from one that is feeding - having to
+                    // infer which is what this whole step exists to end.
+                    doing.Status = ActionStatus.Blocked;
+                }
             }
             else if (!fallThrough)
             {
