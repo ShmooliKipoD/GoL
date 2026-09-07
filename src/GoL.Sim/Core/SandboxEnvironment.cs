@@ -6,8 +6,8 @@ using GoL.Sim.Systems;
 
 namespace GoL.Sim.Core;
 
-/// <summary>A morsel of food in the lab.</summary>
-public sealed class LabPlant
+/// <summary>A morsel of food in the sandbox.</summary>
+public sealed class SandboxPlant
 {
     public int Id;
     public Vector2 Position;
@@ -26,7 +26,7 @@ public sealed class LabPlant
 }
 
 /// <summary>
-/// A minimal environment for the Creature Lab: a few hand-placed plants,
+/// A minimal environment for the Sandbox: a few hand-placed plants,
 /// brute-force queries, and a pheromone grid that decays but does not diffuse.
 /// <para>
 /// <b>Deliberately throwaway.</b> The board environment replaces it behind the same
@@ -34,21 +34,34 @@ public sealed class LabPlant
 /// changing a system, the seam was drawn in the wrong place.
 /// </para>
 /// </summary>
-public sealed class LabEnvironment : IEnvironment, ISenseField
+public sealed class SandboxEnvironment : IEnvironment, ISenseField
 {
     private const int ScentChannels = 2;
     private const int ScentGrid = 32;
 
     private readonly float[] _scent = new float[ScentChannels * ScentGrid * ScentGrid];
-    private readonly List<LabPlant> _plants = new();
+    private readonly List<SandboxPlant> _plants = new();
     private Pcg32 _rng;
     private int _nextPlantId;
 
-    public LabEnvironment(SimConfig config)
+    /// <summary>The arena when nobody asks for a size. Small, because the sandbox is
+    /// for inspecting one creature and the view has to scale up far enough to show its
+    /// eyes and mouth arc.</summary>
+    public const float DefaultSize = 340f;
+
+    /// <param name="size">
+    /// An explicit arena side, or null to take the default.
+    /// <para>
+    /// It is a parameter rather than a config read because <see cref="SimConfig"/>'s
+    /// world size is the <i>board</i>'s: the config screen floors it at 512, so the
+    /// old <c>Min(config.WorldSize, 340)</c> could never once select the config value
+    /// and was a hardcoded 340 wearing a clamp. The sandbox screen now passes what the
+    /// operator chose, and the headless runner and the tests keep the default.
+    /// </para>
+    /// </param>
+    public SandboxEnvironment(SimConfig config, float? size = null)
     {
-        // A small arena: the lab is for inspecting one creature, so the view can be
-        // scaled up enough to see its eyes and mouth arc.
-        WorldSize = MathF.Min(config.WorldSize, 340f);
+        WorldSize = size ?? DefaultSize;
         Toroidal = config.Toroidal;
         _rng = new Pcg32((ulong)(config.Seed == 0 ? 12345 : config.Seed), StreamId.Plants);
     }
@@ -58,11 +71,11 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
     public float WorldSize { get; }
     public bool Toroidal { get; }
 
-    public IReadOnlyList<LabPlant> Plants => _plants;
+    public IReadOnlyList<SandboxPlant> Plants => _plants;
 
-    public LabPlant AddPlant(Vector2 position, float energy = 35f)
+    public SandboxPlant AddPlant(Vector2 position, float energy = 35f)
     {
-        var plant = new LabPlant
+        var plant = new SandboxPlant
         {
             Id = _nextPlantId++,
             Position = position,
@@ -118,7 +131,7 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
         float arc = genome.Trait(TraitAxis.MouthArc);
 
         // Finish what the mouth started, while it lasts and stays in reach.
-        LabPlant? best = Latched(mind.BiteTarget, body, reach, arc);
+        SandboxPlant? best = Latched(mind.BiteTarget, body, reach, arc);
         float bestDistance = float.MaxValue;
 
         if (best is null) foreach (var plant in _plants)
@@ -148,7 +161,7 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
         mind.BitThisTick = true;
 
         // Eaten greens are gone. One seeds elsewhere later so the arena cannot
-        // empty - the lab exists to demonstrate feeding, repeatedly.
+        // empty - the sandbox exists to demonstrate feeding, repeatedly.
         if (!best.Alive)
         {
             best.Energy = 0f;
@@ -163,7 +176,7 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
     private const float RespawnDelay = 6f;
 
     /// <summary>The latched plant, if it is still worth finishing and in reach.</summary>
-    private LabPlant? Latched(int id, Body body, float reach, float arc)
+    private SandboxPlant? Latched(int id, Body body, float reach, float arc)
     {
         if (id < 0 || id >= _plants.Count) return null;
 
@@ -180,7 +193,7 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
         return MathF.Abs(relative) <= arc ? plant : null;
     }
 
-    /// <summary>The lab leaves no corpse; carrion is a board concern.</summary>
+    /// <summary>The sandbox leaves no corpse; carrion is a board concern.</summary>
     public void OnDeath(Vector2 position, float radius, float remainingEnergy) { }
 
     // --- ISenseField ---
@@ -255,7 +268,7 @@ public sealed class LabEnvironment : IEnvironment, ISenseField
         return _scent[Index(channel, x, y)];
     }
 
-    /// <summary>Flat in the lab. A real fertility field is a board feature.</summary>
+    /// <summary>Flat in the sandbox. A real fertility field is a board feature.</summary>
     public float SampleFertility(Vector2 position) => 0.5f;
 
     public Vector2 Offset(Vector2 from, Vector2 to)

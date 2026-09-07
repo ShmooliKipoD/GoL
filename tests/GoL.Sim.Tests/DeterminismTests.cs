@@ -16,7 +16,7 @@ public class DeterminismTests
     private static SimWorld Build(int seed, int creatures = 12, int plants = 30)
     {
         var config = new SimConfig { Seed = seed, WorldSize = 340f, TicksPerSecond = 60 };
-        var environment = new LabEnvironment(config);
+        var environment = new SandboxEnvironment(config);
         var world = new SimWorld(config, environment);
 
         environment.SeedPlants(plants);

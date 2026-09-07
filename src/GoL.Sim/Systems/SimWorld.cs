@@ -46,7 +46,7 @@ public sealed class SimWorld
         // simulation hands it a bridge rather than the entity store.
         switch (environment.SenseField)
         {
-            case LabEnvironment lab: lab.Creatures = new EcsCreatureIndex(this); break;
+            case SandboxEnvironment sandbox: sandbox.Creatures = new EcsCreatureIndex(this); break;
             case Board.BoardEnvironment board: board.Creatures = new EcsCreatureIndex(this); break;
         }
 
@@ -55,7 +55,7 @@ public sealed class SimWorld
             .AddSystem(new SenseSystem(this))
             .AddSystem(new ThinkSystem())
             // The action table, filling up one at a time through Step 3g. Each is
-            // written and verified in the Creature Lab before the next is added.
+            // written and verified in the Sandbox before the next is added.
             .AddSystem(new ActionRunnerSystem(this,
                 new MoveAction(),
                 new TurnAction(),

@@ -21,7 +21,7 @@ public sealed class BreedAction : ICreatureAction
     /// Deliberately not the brain's gate as well. Selecting this action is what
     /// expresses wanting to - the runner only picks Reproduce when that effector
     /// clears the deadband - so testing it again here would ask the same question
-    /// twice, and would leave the lab unable to force a birth on a genome whose gate
+    /// twice, and would leave the sandbox unable to force a birth on a genome whose gate
     /// happens never to open.
     /// </para>
     /// <para>

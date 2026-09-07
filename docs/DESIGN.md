@@ -933,3 +933,116 @@ to take.
 `src/GoL.App/Screens/CreatureLabScreen.cs`, `src/GoL.Render/InspectorRenderer.cs`,
 `tests/GoL.Sim.Tests/ActionExecutionTests.cs`, `tools/GoL.Headless/Program.cs`,
 `docs/{ARCHITECTURE,CONTROLS}.md`.
+
+## Step 3h — The Creature Lab becomes the Sandbox
+
+**Problem.** The lab could be watched but not *arranged*. Everything about it was
+decided at construction: a 340-unit arena, 240 greens scattered at random, one
+creature. `Esc` left immediately, the mouse only zoomed, and the arena size was
+unreachable — `LabEnvironment` computed `Min(config.WorldSize, 340)` while the config
+screen floors world size at **512**, so the config value could never once win. That
+clamp had been a hardcoded 340 wearing a disguise since the day it was written.
+
+The name had drifted too. "Creature Lab" described a checkpoint for verifying Step 2;
+what the screen is actually for now is setting up a situation and seeing what a
+creature does in it.
+
+**Approach.** Rename throughout — screen, environment, plant type, the headless
+`--lab` flag, both env vars, the test helpers — and then give the screen the three
+things it was missing: an empty arena you populate, a modal pause overlay that can
+resize it, and a way to tell a creature where to go.
+
+Prose in `DESIGN.md` was left alone. Those sections describe steps that happened under
+the old name, and editing them would make the build log describe a past that never
+existed.
+
+### A waypoint is a component, not an action
+
+"Click and the creature walks there" looks like it wants a new `CreatureAction`. It
+must not have one. **That enum is the effector set** — `Actions.Value`, `Requires` and
+`AvailableMask` all index it, and the brain's layout is derived from it — so adding a
+member reshapes every genome that exists and every one that ever will. The same
+argument that keeps chase and flee as one signed `Move` applies here.
+
+So the destination is two fields on `Doing`, beside `Forced`, and `MoveAction` is the
+only thing that reads them. Deliberately **not** `Doing.Target`: that is `EatAction`'s
+latch, and `ActionRunnerSystem` clears it on every action switch. Right for something
+an action acquired for itself; wrong for something imposed from outside — a waypoint
+dropped the moment the brain blinked toward `Turn` would never survive long enough to
+walk anywhere.
+
+`Mind.Intent` was checked as an injection point and is not one: `ThinkSystem`
+overwrites it every tick, before the runner reads it. `Doing` survives because nothing
+rewrites it wholesale.
+
+`Doing.Clear()` needed reading rather than assuming, since `Run` calls it on any idle
+tick. It clears `HasTarget` and leaves `Forced` alone — so the waypoint sits with
+`Forced`, and `Clear()` was not touched.
+
+### Starving must not delete the arena
+
+`if (!Subject.Alive) Reset()` was harmless while the arena regenerated identically
+from a seed. With the greens hand-placed it is destructive: the arena now starts with
+no food, so starving is the ordinary consequence of walking away from what you laid
+out, and rebuilding would erase the experiment at the exact moment it produced a
+result.
+
+How long that takes was measured rather than guessed - `--sandbox --plants 0
+--creatures 1` dies between tick 6000 and 7200, so **about 110 seconds** of an empty
+arena. Not a corner case: it is what happens if you leave the screen open while
+deciding where to put the first green.
+
+Three paths that shared one method now differ. Death respawns a creature into the
+**existing** world; `R` rebuilds; the size row rebuilds. `Reset()` is gone, and with it
+a bug it was hiding — it was `ShowScreen(new …Screen(Gol))`, so a death constructed a
+fresh screen with the size index back at its initialiser and silently snapped a 1360
+arena back to 340.
+
+### Two clicks, one button
+
+Placing greens and setting a destination both want the left button. `P`-held
+disambiguates, rather than a placement mode: a mode needs an indicator and its own way
+out, and greens get dropped in bursts and then not at all.
+
+The click needs screen→world, which the sandbox had no way to compute — it built
+`Scale * Translation` inline and projected forward by hand for the action label. That
+is now `ArenaView`, a `(scale, offset)` value in `GoL.Render` with both directions on
+it. It holds no policy about what is centred or how far it is zoomed, so it is pure
+arithmetic and testable with no graphics device.
+
+**It is captured at the top of `Update`, before the sim steps.** A click was aimed at
+the frame that was drawn, and recomputing the projection after the step puts every
+green a few pixels behind a moving subject while the view follows it.
+
+**Measured.** Board soak, 20000 ticks, seed 42, on this branch before and after:
+`world hash 961B680496EE7337` both times. The waypoint defaults to unset and the board
+never sets it, so the whole feature is inert outside the Sandbox — which is the claim
+that needed evidence, not argument.
+
+**Verified.** 152 tests, up from 139, and the app run for 175 seconds on an empty
+arena - past that 110-second mark, so the respawn path ran for real rather than only
+in principle. The five sim tests pin what the override has to
+do *and stop doing*: it steers (against a no-waypoint control, because a brain left
+alone turns constantly and "the error got smaller" would pass on a coin flip), it
+closes distance, it clears on arrival, the arrival tick still reports `Move` running —
+the rule that one body is driven exactly once per tick — and with the flag clear two
+worlds stay bit-identical. Eight UI tests cover `ArenaView`'s round trip and
+`PauseOverlay`'s modality: it must swallow *every* frame it is open, not only the ones
+it acts on, because the screen underneath binds `A`, `N` and `Space` while `InputMap`
+maps those same keys to Left, No and Accept.
+
+**Still true / next.** The arena rebuild throws the world away and makes a new one;
+that is honest for a sandbox and would not be for the board, where `BoardCamera`
+caches world size in a `readonly` field and `MinZoom` is absolute pixels-per-unit.
+Resizing the board is a separate piece of work. The creature-states and brain arc from
+Step 3g is unchanged and still next.
+
+**Files:** `src/GoL.App/Screens/SandboxScreen.cs` (renamed from
+`CreatureLabScreen.cs`), `src/GoL.Sim/Core/SandboxEnvironment.cs` (renamed from
+`LabEnvironment.cs`), `src/GoL.Render/{ArenaView,PauseOverlay}.cs` (new),
+`src/GoL.Sim/Acting/MoveAction.cs`, `src/GoL.Sim/Components/Components.cs`,
+`src/GoL.App/Screens/MainMenuScreen.cs`, `src/GoL.App/GolGame.cs`,
+`src/GoL.Sim/Systems/SimWorld.cs`, `tools/GoL.Headless/Program.cs`,
+`tests/GoL.Sim.Tests/WaypointTests.cs`,
+`tests/GoL.Ui.Tests/{ArenaViewTests,PauseOverlayTests}.cs`,
+`docs/{CONTROLS,ARCHITECTURE,GENOME}.md`, `CLAUDE.md`.

@@ -220,7 +220,7 @@ public class ActionTests
     public void ActionSystem_PublishesBehaviourForEveryLivingCreature()
     {
         var config = new SimConfig { Seed = 4, WorldSize = 340f };
-        var world = new SimWorld(config, new LabEnvironment(config));
+        var world = new SimWorld(config, new SandboxEnvironment(config));
 
         var rng = new Pcg32(4);
         for (int i = 0; i < 5; i++)

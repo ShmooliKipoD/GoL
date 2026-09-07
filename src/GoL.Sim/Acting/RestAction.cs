@@ -16,7 +16,7 @@ public sealed class RestAction : ICreatureAction
 
     /// <summary>The runner never selects an action this genome cannot perform -
     /// unavailable actions read zero - so reaching here means the attribute is
-    /// present. Checked anyway, because the lab can force any action at all.</summary>
+    /// present. Checked anyway, because the sandbox can force any action at all.</summary>
     public bool CanStart(in ActionContext ctx) =>
         Actions.IsAvailable(CreatureAction.Torpor, ctx.Genome);
 

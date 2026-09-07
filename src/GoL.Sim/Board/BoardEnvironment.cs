@@ -10,7 +10,7 @@ namespace GoL.Sim.Board;
 /// The real world: vegetation on a grid, ground fertility, diffusing scent, and a
 /// spatial hash over the creatures.
 /// <para>
-/// Replaces <see cref="LabEnvironment"/> behind the same <see cref="IEnvironment"/>
+/// Replaces <see cref="SandboxEnvironment"/> behind the same <see cref="IEnvironment"/>
 /// and <see cref="ISenseField"/>, with no change to any system or to creature code -
 /// which is what the Step 2 seam existed to make possible.
 /// </para>

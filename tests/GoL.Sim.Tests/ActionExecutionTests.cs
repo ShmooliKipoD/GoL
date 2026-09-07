@@ -18,11 +18,11 @@ namespace GoL.Sim.Tests;
 /// </summary>
 public class ActionExecutionTests
 {
-    private static (SimWorld World, LabEnvironment Lab) MakeLab(int seed = 5)
+    private static (SimWorld World, SandboxEnvironment Sandbox) MakeSandbox(int seed = 5)
     {
         var config = new SimConfig { Seed = seed, WorldSize = 340f };
-        var lab = new LabEnvironment(config);
-        return (new SimWorld(config, lab), lab);
+        var sandbox = new SandboxEnvironment(config);
+        return (new SimWorld(config, sandbox), sandbox);
     }
 
     private static Genome Seed(ulong seed = 1)
@@ -41,7 +41,7 @@ public class ActionExecutionTests
     [Fact]
     public void Spawn_AttachesDoing()
     {
-        var (world, _) = MakeLab();
+        var (world, _) = MakeSandbox();
         int id = world.Spawn(Seed(), new Vector2(100f, 100f), 0f);
 
         var doing = world.Get<Doing>(id);
@@ -50,7 +50,7 @@ public class ActionExecutionTests
         Assert.False(doing.Active);
         Assert.Null(doing.Forced);
 
-        // The read-only handle the renderers and lab go through must carry it too.
+        // The read-only handle the renderers and sandbox go through must carry it too.
         Assert.Equal(Actions.IdleLabel, world.View(id).ActionLabel);
     }
 
@@ -64,7 +64,7 @@ public class ActionExecutionTests
     [Fact]
     public void Living_IsPublished_EvenWithNoActionsRunning()
     {
-        var (world, _) = MakeLab();
+        var (world, _) = MakeSandbox();
 
         for (int i = 0; i < 4; i++)
             world.Spawn(Seed((ulong)(i + 1)), new Vector2(60f + i * 30f, 100f), 0f);
@@ -86,7 +86,7 @@ public class ActionExecutionTests
     [Fact]
     public void WithMoveRegistered_ACreatureGoesSomewhere()
     {
-        var (world, _) = MakeLab();
+        var (world, _) = MakeSandbox();
         int id = world.Spawn(Seed(), new Vector2(170f, 170f), 0f);
 
         var body = world.Get<Body>(id);
@@ -111,7 +111,7 @@ public class ActionExecutionTests
     [Fact]
     public void AnActionThatCannotRun_DoesNotFreezeTheCreature()
     {
-        var (world, _) = MakeLab();
+        var (world, _) = MakeSandbox();
 
         for (int i = 0; i < 6; i++)
             world.Spawn(Seed((ulong)(i + 1)), new Vector2(60f + i * 40f, 170f), i * 0.7f);
@@ -140,13 +140,13 @@ public class ActionExecutionTests
 
     /// <summary>
     /// A forced action deliberately does <b>not</b> fall through. Watching a pinned
-    /// action fail to start is the diagnostic the lab's force key exists for, and
+    /// action fail to start is the diagnostic the sandbox's force key exists for, and
     /// silently running something else instead would destroy it.
     /// </summary>
     [Fact]
     public void AForcedAction_ReportsBlocked_RatherThanRunningSomethingElse()
     {
-        var (world, _) = MakeLab();
+        var (world, _) = MakeSandbox();
         int id = world.Spawn(Seed(), new Vector2(170f, 170f), 0f);
 
         var doing = world.Get<Doing>(id);
@@ -165,14 +165,14 @@ public class ActionExecutionTests
 
     /// <summary>Puts the subject at a known place with a forced action, so a single
     /// behaviour can be watched without waiting for an unevolved brain to pick it.</summary>
-    private static (SimWorld World, LabEnvironment Lab, int Id, Doing Doing) Subject(
+    private static (SimWorld World, SandboxEnvironment Sandbox, int Id, Doing Doing) Subject(
         Vector2 at, float heading = 0f, int seed = 5)
     {
-        var (world, lab) = MakeLab(seed);
+        var (world, sandbox) = MakeSandbox(seed);
         int id = world.Spawn(Seed(), at, heading);
         var doing = world.Get<Doing>(id);
         doing.Forced = CreatureAction.Bite;
-        return (world, lab, id, doing);
+        return (world, sandbox, id, doing);
     }
 
     /// <summary>
@@ -205,11 +205,11 @@ public class ActionExecutionTests
     public void Eat_ClosesTheDistance_ThenFeeds()
     {
         var start = new Vector2(120f, 170f);
-        var (world, lab, id, _) = Subject(start);
+        var (world, sandbox, id, _) = Subject(start);
 
         // Straight ahead - the creature is heading along +X - and well beyond any
         // mouth, so it has to travel.
-        var plant = lab.AddPlant(new Vector2(180f, 170f));
+        var plant = sandbox.AddPlant(new Vector2(180f, 170f));
 
         var body = world.Get<Body>(id);
         var energy = world.Get<Energy>(id);
@@ -219,7 +219,7 @@ public class ActionExecutionTests
 
         for (int i = 0; i < 600; i++) world.Step();
 
-        float closed = lab.Offset(body.Position, plant.Position).Length();
+        float closed = sandbox.Offset(body.Position, plant.Position).Length();
 
         Assert.True(closed < 60f, $"never closed on the green - still {closed:F1} away");
         Assert.True(energy.LifetimeIntake > 0f, "closed the distance but never ate");
@@ -232,10 +232,10 @@ public class ActionExecutionTests
     [Fact]
     public void Eat_ReportsDone_OnceTheGreenIsEatenOut()
     {
-        var (world, lab, id, doing) = Subject(new Vector2(160f, 170f));
+        var (world, sandbox, id, doing) = Subject(new Vector2(160f, 170f));
 
         // Small enough that a few mouthfuls finish it, and already in reach.
-        var plant = lab.AddPlant(new Vector2(172f, 170f), energy: Metabolism.BiteSize * 2f);
+        var plant = sandbox.AddPlant(new Vector2(172f, 170f), energy: Metabolism.BiteSize * 2f);
 
         bool sawDone = false;
 
@@ -258,10 +258,10 @@ public class ActionExecutionTests
     [Fact]
     public void Eat_StaysOnOneGreen_RatherThanNibblingWhateverIsNearest()
     {
-        var (world, lab, id, _) = Subject(new Vector2(160f, 170f));
+        var (world, sandbox, id, _) = Subject(new Vector2(160f, 170f));
 
-        var first = lab.AddPlant(new Vector2(171f, 170f));
-        var second = lab.AddPlant(new Vector2(173f, 172f));
+        var first = sandbox.AddPlant(new Vector2(171f, 170f));
+        var second = sandbox.AddPlant(new Vector2(173f, 172f));
 
         var mind = world.Get<Mind>(id);
 
@@ -327,7 +327,7 @@ public class ActionExecutionTests
     [Fact]
     public void Breed_WhenTooYoung_ReportsBlocked()
     {
-        var (world, _) = MakeLab();
+        var (world, _) = MakeSandbox();
         int id = world.Spawn(Seed(), new Vector2(170f, 170f), 0f);
 
         var doing = world.Get<Doing>(id);
@@ -347,7 +347,7 @@ public class ActionExecutionTests
     [Fact]
     public void Breed_WhenEveryGatePasses_ProducesAChild()
     {
-        var (world, _) = MakeLab();
+        var (world, _) = MakeSandbox();
         int id = world.Spawn(Seed(), new Vector2(170f, 170f), 0f);
 
         var doing = world.Get<Doing>(id);
@@ -372,7 +372,7 @@ public class ActionExecutionTests
     [Fact]
     public void Breed_DoesNotProduceTwoChildrenFromOneDecision()
     {
-        var (world, _) = MakeLab();
+        var (world, _) = MakeSandbox();
         int id = world.Spawn(Seed(), new Vector2(170f, 170f), 0f);
 
         var doing = world.Get<Doing>(id);
@@ -408,14 +408,14 @@ public class ActionExecutionTests
     }
 
     /// <summary>
-    /// A locked action must never run, however it is asked for. The lab can force
+    /// A locked action must never run, however it is asked for. The sandbox can force
     /// any action at all, so <c>CanStart</c> is the only thing standing between a
     /// forced Rest and a creature resting without the attribute for it.
     /// </summary>
     [Fact]
     public void ALatentAction_IsBlocked_WithoutItsAttribute()
     {
-        var (world, _) = MakeLab();
+        var (world, _) = MakeSandbox();
         int id = world.Spawn(Seed(), new Vector2(170f, 170f), 0f);
 
         var doing = world.Get<Doing>(id);
@@ -450,7 +450,7 @@ public class ActionExecutionTests
 
         for (ulong genomeSeed = 1; genomeSeed <= 12 && !ran; genomeSeed++)
         {
-            var (world, _) = MakeLab();
+            var (world, _) = MakeSandbox();
             int id = world.Spawn(SeedWith(trait, genomeSeed), new Vector2(170f, 170f), 0f);
 
             var doing = world.Get<Doing>(id);
@@ -479,7 +479,7 @@ public class ActionExecutionTests
     [Fact]
     public void Sprint_HasNoActionOfItsOwn_AndFallsThroughToMovement()
     {
-        var (world, _) = MakeLab();
+        var (world, _) = MakeSandbox();
         int id = world.Spawn(SeedWith(LatentTraitId.SprintGland), new Vector2(170f, 170f), 0f);
 
         var doing = world.Get<Doing>(id);

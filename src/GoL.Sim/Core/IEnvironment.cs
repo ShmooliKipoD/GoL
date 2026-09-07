@@ -12,7 +12,7 @@ namespace GoL.Sim.Core;
 /// death - and only the simulation's systems touch it.
 /// </para>
 /// <para>
-/// The seam exists so the Creature Lab's hand-placed plants and the real board can
+/// The seam exists so the Sandbox's hand-placed plants and the real board can
 /// both drive the same systems. If swapping one for the other requires changing a
 /// system, the seam was drawn in the wrong place.
 /// </para>

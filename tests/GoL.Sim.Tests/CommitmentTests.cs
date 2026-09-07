@@ -54,7 +54,7 @@ public class CommitmentTests
     [Fact]
     public void Turning_EasesRatherThanSnapping()
     {
-        var (world, creature) = Lab();
+        var (world, creature) = Sandbox();
         float turnRate = creature.Trait(TraitAxis.TurnRate);
 
         creature.Body.AngularVelocity = 0f;
@@ -95,11 +95,11 @@ public class CommitmentTests
     public void TheBite_StaysOnItsPlant_ThenLetsGo()
     {
         var config = new SimConfig { Seed = 5, WorldSize = 340f };
-        var lab = new LabEnvironment(config);
-        var world = new SimWorld(config, lab);
+        var sandbox = new SandboxEnvironment(config);
+        var world = new SimWorld(config, sandbox);
 
-        var far = lab.AddPlant(new Vector2(112f, 100f), 30f);
-        var near = lab.AddPlant(new Vector2(104f, 100f), 30f);
+        var far = sandbox.AddPlant(new Vector2(112f, 100f), 30f);
+        var near = sandbox.AddPlant(new Vector2(104f, 100f), 30f);
 
         var rng = new Pcg32(5);
         var genome = Genome.CreateSeed(ref rng);
@@ -112,7 +112,7 @@ public class CommitmentTests
 
         // Start on the far plant by hiding the near one behind a first bite.
         mind.BiteTarget = far.Id;
-        lab.ResolveBite(world, body, energy, genome, mind, 1f / 60f);
+        sandbox.ResolveBite(world, body, energy, genome, mind, 1f / 60f);
         Assert.Equal(far.Id, mind.BiteTarget);
 
         float nearBefore = near.Energy;
@@ -122,7 +122,7 @@ public class CommitmentTests
         for (int i = 0; i < 200; i++)
         {
             if (mind.BiteTarget != far.Id) break;
-            lab.ResolveBite(world, body, energy, genome, mind, 1f / 60f);
+            sandbox.ResolveBite(world, body, energy, genome, mind, 1f / 60f);
         }
 
         Assert.Equal(nearBefore, near.Energy, 3);
@@ -137,10 +137,10 @@ public class CommitmentTests
     public void ParkedBesideAGreen_ACreatureEatsItOut()
     {
         var config = new SimConfig { Seed = 8, WorldSize = 340f };
-        var lab = new LabEnvironment(config);
-        var world = new SimWorld(config, lab);
+        var sandbox = new SandboxEnvironment(config);
+        var world = new SimWorld(config, sandbox);
 
-        var plant = lab.AddPlant(new Vector2(108f, 100f), 35f);
+        var plant = sandbox.AddPlant(new Vector2(108f, 100f), 35f);
 
         var rng = new Pcg32(8);
         var genome = Genome.CreateSeed(ref rng);
@@ -152,7 +152,7 @@ public class CommitmentTests
         var energy = new Energy { Current = 0f, Maximum = 10000f };
 
         for (int i = 0; i < 300; i++)
-            lab.ResolveBite(world, body, energy, genome, mind, 1f / 60f);
+            sandbox.ResolveBite(world, body, energy, genome, mind, 1f / 60f);
 
         float expected = 35f * genome.Trait(TraitAxis.DigestGrass);
 
@@ -168,10 +168,10 @@ public class CommitmentTests
     public void AConsumedGreen_StaysGone_ThenReturnsAsASeedling()
     {
         var config = new SimConfig { Seed = 12, WorldSize = 340f };
-        var lab = new LabEnvironment(config);
-        var world = new SimWorld(config, lab);
+        var sandbox = new SandboxEnvironment(config);
+        var world = new SimWorld(config, sandbox);
 
-        var plant = lab.AddPlant(new Vector2(108f, 100f), 35f);
+        var plant = sandbox.AddPlant(new Vector2(108f, 100f), 35f);
 
         var rng = new Pcg32(12);
         var genome = Genome.CreateSeed(ref rng);
@@ -183,7 +183,7 @@ public class CommitmentTests
         var energy = new Energy { Current = 0f, Maximum = 10000f };
 
         for (int i = 0; i < 300; i++)
-            lab.ResolveBite(world, body, energy, genome, mind, 1f / 60f);
+            sandbox.ResolveBite(world, body, energy, genome, mind, 1f / 60f);
 
         Assert.False(plant.Alive);
         Assert.True(plant.RespawnAt > 0f);
@@ -230,10 +230,10 @@ public class CommitmentTests
         Assert.Equal(CreatureAction.Move, taken);
     }
 
-    private static (SimWorld World, CreatureView Subject) Lab(ulong seed = 1)
+    private static (SimWorld World, CreatureView Subject) Sandbox(ulong seed = 1)
     {
         var config = new SimConfig { Seed = (int)seed, WorldSize = 340f };
-        var world = new SimWorld(config, new LabEnvironment(config));
+        var world = new SimWorld(config, new SandboxEnvironment(config));
 
         var rng = new Pcg32(seed);
         return (world, world.View(world.Spawn(Genome.CreateSeed(ref rng), new Vector2(50f, 50f), 0f)));

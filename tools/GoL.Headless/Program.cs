@@ -17,7 +17,7 @@ using GoL.Sim.Systems;
 int ticks = ArgInt(args, "--ticks", 6000);
 int seed = ArgInt(args, "--seed", 42);
 int creatures = ArgInt(args, "--creatures", 40);
-bool lab = Array.IndexOf(args, "--lab") >= 0;
+bool sandbox = Array.IndexOf(args, "--sandbox") >= 0;
 
 // Grant every latent attribute to the starting population. Not a simulation mode -
 // a way to prove the latent rows of the behaviour histogram actually report. Left
@@ -28,7 +28,7 @@ bool unlockAll = Array.IndexOf(args, "--unlock-all") >= 0;
 var config = new SimConfig
 {
     Seed = seed,
-    WorldSize = lab ? 340f : 1024f,
+    WorldSize = sandbox ? SandboxEnvironment.DefaultSize : 1024f,
     TicksPerSecond = 60,
     PlantDensity = 0.18f,
 };
@@ -36,12 +36,12 @@ var config = new SimConfig
 IEnvironment environment;
 float worldSize;
 
-if (lab)
+if (sandbox)
 {
-    var labEnv = new LabEnvironment(config);
-    labEnv.SeedPlants(ArgInt(args, "--plants", 60));
-    environment = labEnv;
-    worldSize = labEnv.WorldSize;
+    var sandboxEnv = new SandboxEnvironment(config);
+    sandboxEnv.SeedPlants(ArgInt(args, "--plants", 60));
+    environment = sandboxEnv;
+    worldSize = sandboxEnv.WorldSize;
 }
 else
 {
@@ -69,7 +69,7 @@ for (int i = 0; i < creatures; i++)
         rng.NextFloat(0f, MathF.Tau));
 }
 
-Console.WriteLine($"{(lab ? "lab" : "board")}  seed {seed}  {creatures} creatures  "
+Console.WriteLine($"{(sandbox ? "sandbox" : "board")}  seed {seed}  {creatures} creatures  "
     + $"world {worldSize:F0}  {ticks} ticks{(unlockAll ? "  (all attributes granted)" : "")}");
 Console.WriteLine($"{"tick",8} {"pop",6} {"gen",5} {"mean E",9} {"in/s",7} {"net/s",7} "
     + $"{"plants",7} {"soil",6}  attributes");

@@ -15,7 +15,7 @@ public readonly record struct Percept(
 /// <summary>
 /// The world as a creature's senses can reach it.
 /// <para>
-/// This is the seam between the creature (Step 2) and the board (Step 3). The lab
+/// This is the seam between the creature (Step 2) and the board (Step 3). The sandbox
 /// backs it with brute-force scans over a handful of hand-placed plants; the real
 /// world backs it with a spatial hash, plant grid and diffusing pheromone field.
 /// Swapping one for the other must not require touching creature code - if it

@@ -21,15 +21,15 @@ public sealed class MainMenuScreen : GolScreen
         _menu = new MenuList(new[]
         {
             new MenuEntry("New Game", () => Gol.ShowScreen(new BoardScreen(Gol))),
-            new MenuEntry("Creature Lab", OnNewGame),
+            new MenuEntry("Sandbox", OnSandbox),
             new MenuEntry("Configuration", () => Gol.ShowScreen(new ConfigScreen(Gol))),
             new MenuEntry("Exit", _exitPrompt.Open),
         });
     }
 
-    private void OnNewGame()
+    private void OnSandbox()
     {
-        Gol.ShowScreen(new CreatureLabScreen(Gol));
+        Gol.ShowScreen(new SandboxScreen(Gol));
     }
 
     public override void Update(GameTime gameTime)

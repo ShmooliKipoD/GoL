@@ -196,19 +196,19 @@ public class FeedingTests
     }
 
     /// <summary>
-    /// The lab must be able to demonstrate feeding more than once. Eaten greens stay
+    /// The sandbox must be able to demonstrate feeding more than once. Eaten greens stay
     /// gone for a few seconds - that is the point, so the arena visibly thins where a
     /// creature has been feeding - but they come back, so it cannot empty.
     /// </summary>
     [Fact]
-    public void Lab_RefillsAfterGreensAreEaten()
+    public void Sandbox_RefillsAfterGreensAreEaten()
     {
         var config = new SimConfig { Seed = 5, WorldSize = 340f };
-        var lab = new LabEnvironment(config);
-        var world = new SimWorld(config, lab);
-        lab.SeedPlants(24);
+        var sandbox = new SandboxEnvironment(config);
+        var world = new SimWorld(config, sandbox);
+        sandbox.SeedPlants(24);
 
-        int before = lab.Plants.Count;
+        int before = sandbox.Plants.Count;
 
         var genome = Seed(5);
         var mind = MakeMind(genome);
@@ -217,24 +217,24 @@ public class FeedingTests
         // Park on each plant in turn and strip it.
         for (int p = 0; p < 8; p++)
         {
-            var target = lab.Plants[p];
+            var target = sandbox.Plants[p];
             var body = new Body { Position = target.Position, Radius = 6f, Heading = 0f };
             mind.BiteTarget = -1;
 
             for (int i = 0; i < 400; i++)
-                lab.ResolveBite(world, body, energy, genome, mind, 1f / 60f);
+                sandbox.ResolveBite(world, body, energy, genome, mind, 1f / 60f);
         }
 
         Assert.True(energy.LifetimeIntake > 0f, "the creature must actually have eaten");
 
-        int eaten = lab.Plants.Count(p => !p.Alive);
+        int eaten = sandbox.Plants.Count(p => !p.Alive);
         Assert.True(eaten > 0, "greens that were eaten out must actually be gone for a while");
 
         // Well past the respawn delay.
         for (int i = 0; i < 1200; i++) world.Step();
 
-        Assert.Equal(before, lab.Plants.Count);
-        Assert.All(lab.Plants, p => Assert.True(p.Alive, "the arena must not stay empty"));
+        Assert.Equal(before, sandbox.Plants.Count);
+        Assert.All(sandbox.Plants, p => Assert.True(p.Alive, "the arena must not stay empty"));
     }
 
     /// <summary>
@@ -273,10 +273,10 @@ public class FeedingTests
     public void ABite_TakesAMouthful_ThenTheCreatureChews()
     {
         var config = new SimConfig { Seed = 31, WorldSize = 340f };
-        var lab = new LabEnvironment(config);
-        var world = new SimWorld(config, lab);
+        var sandbox = new SandboxEnvironment(config);
+        var world = new SimWorld(config, sandbox);
 
-        var plant = lab.AddPlant(new Vector2(108f, 100f), 35f);
+        var plant = sandbox.AddPlant(new Vector2(108f, 100f), 35f);
 
         var genome = Seed(31);
         var mind = MakeMind(genome);
@@ -284,7 +284,7 @@ public class FeedingTests
         var energy = new Energy { Current = 0f, Maximum = 10000f };
 
         float dt = 1f / 60f;
-        lab.ResolveBite(world, body, energy, genome, mind, dt);
+        sandbox.ResolveBite(world, body, energy, genome, mind, dt);
 
         float first = energy.Current;
         float expected = Metabolism.BiteSize * genome.Trait(TraitAxis.DigestGrass);
@@ -293,12 +293,12 @@ public class FeedingTests
         Assert.True(first > 1f, "a mouthful has to be big enough to see");
 
         // Immediately after, it is chewing - more ticks take nothing.
-        for (int i = 0; i < 10; i++) lab.ResolveBite(world, body, energy, genome, mind, dt);
+        for (int i = 0; i < 10; i++) sandbox.ResolveBite(world, body, energy, genome, mind, dt);
         Assert.Equal(first, energy.Current, 3);
 
         // Once the interval has passed, the next mouthful lands.
         int ticks = (int)(Metabolism.BiteInterval / dt) + 2;
-        for (int i = 0; i < ticks; i++) lab.ResolveBite(world, body, energy, genome, mind, dt);
+        for (int i = 0; i < ticks; i++) sandbox.ResolveBite(world, body, energy, genome, mind, dt);
 
         Assert.True(energy.Current > first + expected * 0.9f, "the next bite should land");
         Assert.True(plant.Energy < 35f - Metabolism.BiteSize, "and the green should be going");

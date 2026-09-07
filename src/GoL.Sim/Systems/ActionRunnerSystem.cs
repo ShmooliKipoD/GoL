@@ -117,7 +117,7 @@ public sealed class ActionRunnerSystem : SimSystem
     /// </summary>
     private void Run(in ActionContext ctx, Doing doing, float dt)
     {
-        // The lab pins an action so it can be watched in isolation, and pinning
+        // The sandbox pins an action so it can be watched in isolation, and pinning
         // deliberately does NOT fall through: watching a forced Eat fail to start is
         // exactly the diagnostic it exists for. Nothing on the board sets this.
         if (doing.Forced is { } forced)
@@ -207,7 +207,7 @@ public sealed class ActionRunnerSystem : SimSystem
             else if (!fallThrough)
             {
                 // No behaviour written for it yet. Still worth showing as blocked
-                // rather than as idle, so a half-built table is visible in the lab.
+                // rather than as idle, so a half-built table is visible in the sandbox.
                 doing.Action = want;
                 doing.Active = true;
                 doing.Status = ActionStatus.Blocked;

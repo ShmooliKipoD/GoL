@@ -215,7 +215,7 @@ public sealed class InspectorRenderer
     /// The current action, above the creature.
     /// <para>
     /// Takes an <b>already-computed screen position</b> rather than a camera: the
-    /// board projects through <c>BoardCamera.WorldToScreen</c>, but the lab has no
+    /// board projects through <c>BoardCamera.WorldToScreen</c>, but the sandbox has no
     /// camera at all and draws through a plain scale-and-offset matrix. Passing the
     /// result keeps one label renderer working for both.
     /// </para>

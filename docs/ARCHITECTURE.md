@@ -92,7 +92,7 @@ So the split is:
 
 | Kind | Members | Why |
 |---|---|---|
-| **Screens** (`GameScreen`, swapped by `ScreenManager`) | `MainMenuScreen`, `ConfigScreen`, `CreatureLabScreen`, `SimulationScreen` | Each owns state the others do not need |
+| **Screens** (`GameScreen`, swapped by `ScreenManager`) | `MainMenuScreen`, `ConfigScreen`, `SandboxScreen`, `SimulationScreen` | Each owns state the others do not need |
 | **Overlays** (a `MenuList` drawn by its host screen, gated on a local flag) | exit-confirm, pause | Must not destroy the state underneath them |
 
 ## Input

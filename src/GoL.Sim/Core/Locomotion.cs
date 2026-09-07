@@ -167,7 +167,7 @@ public static class Locomotion
     /// Split from wanting to. Selecting the Reproduce action is what expresses the
     /// brain's wish - the runner only picks it when that effector clears the
     /// deadband - so re-testing the same gate inside the action conflated two
-    /// separate questions. It also made the Creature Lab's force key useless for
+    /// separate questions. It also made the Sandbox's force key useless for
     /// breeding: forcing the action stands in for the brain's wanting, and a genome
     /// whose gate never opened could never be watched breeding at all.
     /// </para>

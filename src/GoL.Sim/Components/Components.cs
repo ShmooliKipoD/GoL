@@ -150,7 +150,7 @@ public sealed class Mind
 
     /// <summary>
     /// What the mouth is currently working on: a grid cell on the board, a plant id
-    /// in the lab. <b>-1 for nothing</b>, and that initialiser is load-bearing - an
+    /// in the sandbox. <b>-1 for nothing</b>, and that initialiser is load-bearing - an
     /// int defaults to 0, which is a perfectly valid index in both, so every newborn
     /// would otherwise start latched onto whatever occupies cell zero.
     /// <para>
@@ -166,7 +166,7 @@ public sealed class Mind
     public float BiteCooldown;
 
     /// <summary>Recompiles after the genome changed in place. Normally a genome is
-    /// fixed for a lifetime; the lab uses this to grant an attribute on demand.</summary>
+    /// fixed for a lifetime; the sandbox uses this to grant an attribute on demand.</summary>
     public void Rebuild(Genome genome)
     {
         Brain.Recompile(genome);
@@ -281,14 +281,35 @@ public sealed class Doing
     /// the world is toroidal, so every coordinate is a legitimate destination.</summary>
     public bool HasTarget;
 
-    /// <summary>An action pinned by the Creature Lab, overriding the brain.
+    /// <summary>An action pinned by the Sandbox, overriding the brain.
     /// <para>
-    /// <b>A lab affordance and nothing else.</b> The board never sets it. It exists
+    /// <b>A sandbox affordance and nothing else.</b> The board never sets it. It exists
     /// because an unevolved brain simply never chooses the action you want to watch,
-    /// which makes "implement them one by one, checking in the lab" impossible
+    /// which makes "implement them one by one, checking in the sandbox" impossible
     /// otherwise.
     /// </para></summary>
     public CreatureAction? Forced;
+
+    /// <summary>A destination pinned by the Sandbox, in world space.
+    /// <para>
+    /// <b>A sandbox affordance and nothing else</b>, exactly like <see cref="Forced"/>
+    /// - the board never sets it, and only <c>MoveAction</c> reads it. It exists so a
+    /// creature can be sent somewhere on purpose, which is the only way to watch
+    /// travel over ground you chose rather than ground its brain happened to pick.
+    /// </para>
+    /// <para>
+    /// Deliberately <b>not</b> <see cref="Target"/>. That one is <c>EatAction</c>'s
+    /// latch and <c>ActionRunnerSystem</c> clears it on every action switch, which is
+    /// right for something an action acquired for itself and wrong for something
+    /// imposed from outside: a waypoint dropped the moment the brain blinked toward
+    /// Turn would never survive long enough to walk. So this sits beside
+    /// <see cref="Forced"/>, survives switches, and is cleared only on arrival.
+    /// </para></summary>
+    public Vector2 Waypoint;
+
+    /// <summary>Whether <see cref="Waypoint"/> holds anything. A flag rather than a
+    /// sentinel position, for the same reason as <see cref="HasTarget"/>.</summary>
+    public bool HasWaypoint;
 
     /// <summary>
     /// Set by <c>BreedAction</c> when every gate has passed, and cleared once the
@@ -301,6 +322,13 @@ public sealed class Doing
     /// </summary>
     public bool WantsBirth;
 
+    /// <summary>Drops everything the current action was holding.
+    /// <para>
+    /// Note what is <i>not</i> here: <see cref="Forced"/> and <see cref="HasWaypoint"/>.
+    /// Both are imposed by the Sandbox rather than acquired by an action, so neither
+    /// is this method's to release - clearing them here would let a single idle tick
+    /// silently undo what the operator asked for.
+    /// </para></summary>
     public void Clear()
     {
         Active = false;

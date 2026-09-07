@@ -20,7 +20,7 @@ public class MetabolismTests
         ulong seed = 1, Action<Genome>? configure = null)
     {
         var config = new SimConfig { Seed = (int)seed, WorldSize = 340f };
-        var env = new LabEnvironment(config);
+        var env = new SandboxEnvironment(config);
         var world = new SimWorld(config, env);
 
         var rng = new Pcg32(seed);

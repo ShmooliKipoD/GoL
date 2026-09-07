@@ -9,7 +9,7 @@ namespace GoL.Sim.Core;
 /// renderers, the inspector panels, tests.
 /// <para>
 /// A plain readonly struct rather than a <c>ref struct</c> (which
-/// <see cref="SenseSubject"/> is) because callers legitimately store one: the lab
+/// <see cref="SenseSubject"/> is) because callers legitimately store one: the sandbox
 /// keeps a handle to the creature it is following. It holds references to
 /// components the ECS owns, so it stays valid only while that entity lives.
 /// </para>

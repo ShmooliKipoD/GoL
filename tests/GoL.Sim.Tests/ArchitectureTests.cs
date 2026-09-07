@@ -57,7 +57,7 @@ public class ArchitectureTests
     public void AWorld_RunsWithoutAnyGraphicsDevice()
     {
         var config = new SimConfig { Seed = 99, WorldSize = 340f, TicksPerSecond = 60 };
-        var environment = new LabEnvironment(config);
+        var environment = new SandboxEnvironment(config);
         var world = new SimWorld(config, environment);
 
         environment.SeedPlants(12);

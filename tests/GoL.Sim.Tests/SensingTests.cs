@@ -16,11 +16,11 @@ public class SensingTests
     private const float Arena = 340f;
 
     /// <summary>A creature at the arena centre facing +X, with known eye geometry.</summary>
-    private static (SimWorld World, LabEnvironment Env, CreatureView Subject) Lab(
+    private static (SimWorld World, SandboxEnvironment Env, CreatureView Subject) Sandbox(
         float eyeRange = 100f, float halfFov = 0.5f, float heading = 0f)
     {
         var config = new SimConfig { Seed = 1, WorldSize = Arena, Toroidal = true };
-        var env = new LabEnvironment(config);
+        var env = new SandboxEnvironment(config);
         var world = new SimWorld(config, env);
 
         var rng = new Pcg32(42);
@@ -63,7 +63,7 @@ public class SensingTests
     [Fact]
     public void SeesAPlantDirectlyAhead()
     {
-        var (world, env, subject) = Lab();
+        var (world, env, subject) = Sandbox();
         env.AddPlant(subject.Position + new Vector2(50f, 0f));
 
         Look(world, subject);
@@ -78,7 +78,7 @@ public class SensingTests
     [Fact]
     public void DoesNotSeeAPlantDirectlyBehind()
     {
-        var (world, env, subject) = Lab();
+        var (world, env, subject) = Sandbox();
         env.AddPlant(subject.Position + new Vector2(-50f, 0f));
 
         Look(world, subject);
@@ -92,7 +92,7 @@ public class SensingTests
     public void RangeIsRespected(float distanceFactor, bool expected)
     {
         const float Range = 100f;
-        var (world, env, subject) = Lab(eyeRange: Range);
+        var (world, env, subject) = Sandbox(eyeRange: Range);
         env.AddPlant(subject.Position + new Vector2(Range * distanceFactor, 0f));
 
         Look(world, subject);
@@ -106,7 +106,7 @@ public class SensingTests
     public void FieldOfViewIsRespected(float angle, bool expected)
     {
         const float HalfFov = 0.5f;
-        var (world, env, subject) = Lab(halfFov: HalfFov);
+        var (world, env, subject) = Sandbox(halfFov: HalfFov);
 
         env.AddPlant(subject.Position + new Vector2(
             MathF.Cos(angle) * 50f, MathF.Sin(angle) * 50f));
@@ -123,7 +123,7 @@ public class SensingTests
     [Fact]
     public void NearerObjectOccludesFartherOneInTheSameBin()
     {
-        var (world, env, subject) = Lab();
+        var (world, env, subject) = Sandbox();
         env.AddPlant(subject.Position + new Vector2(80f, 0f));
         env.AddPlant(subject.Position + new Vector2(20f, 0f));
 
@@ -139,7 +139,7 @@ public class SensingTests
     public void SeesAcrossTheWorldSeam_WhenToroidal()
     {
         var config = new SimConfig { Seed = 1, WorldSize = Arena, Toroidal = true };
-        var env = new LabEnvironment(config);
+        var env = new SandboxEnvironment(config);
         var world = new SimWorld(config, env);
 
         var rng = new Pcg32(7);
@@ -162,7 +162,7 @@ public class SensingTests
     [Fact]
     public void RearEye_ExistsOnlyOnceTheTraitIsUnlocked()
     {
-        var (world, env, subject) = Lab();
+        var (world, env, subject) = Sandbox();
         env.AddPlant(subject.Position + new Vector2(-50f, 0f));
 
         Look(world, subject);
@@ -182,7 +182,7 @@ public class SensingTests
     [Fact]
     public void MouthArcIsRespected_ANearbyPlantBehindIsNotInReach()
     {
-        var (world, env, subject) = Lab();
+        var (world, env, subject) = Sandbox();
         SetTrait(subject.Genome, TraitAxis.MouthReach, 5f);
         SetTrait(subject.Genome, TraitAxis.MouthArc, 0.4f);
 

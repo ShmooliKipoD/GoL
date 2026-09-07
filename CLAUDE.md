@@ -21,7 +21,7 @@ MonoGame DesktopGL 3.8.1.303 + MonoGame.Extended 4.0.0, `net8.0`, macOS desktop.
 | `docs/DESIGN.md` | Cumulative build log — one section per step: problem, approach, measurements, files touched |
 | `docs/ARCHITECTURE.md` | Project layout, the **tick order** and why it is load-bearing |
 | `docs/GENOME.md` | Trait axes, latent attributes, mutation classes |
-| `docs/CONTROLS.md` | Every key in the board view and the Creature Lab |
+| `docs/CONTROLS.md` | Every key and mouse binding in the board view and the Sandbox |
 
 ## Workflow
 
@@ -83,15 +83,15 @@ slower.
 # the board
 dotnet run --project tools/GoL.Headless -c Release -- --ticks 20000 --seed 42
 
-# the Creature Lab arena, which is small and dense
+# the Sandbox arena, which is small and dense
 dotnet run --project tools/GoL.Headless -c Release -- \
-    --lab --plants 240 --creatures 8 --ticks 20000 --seed 7
+    --sandbox --plants 240 --creatures 8 --ticks 20000 --seed 7
 ```
 
 | Flag | Meaning |
 |---|---|
 | `--ticks`, `--seed`, `--creatures` | Run length, RNG seed, starting population |
-| `--lab`, `--plants` | Use `LabEnvironment` instead of the board, with N plants |
+| `--sandbox`, `--plants` | Use `SandboxEnvironment` instead of the board, with N plants |
 | `--unlock-all` | Grant every latent attribute at spawn. **Not a simulation mode** — it makes the latent rows of the behaviour histogram falsifiable, since a short run unlocks nothing and a permanently-zero row is indistinguishable from a broken one |
 
 It prints a per-action histogram with **`running` and `blocked` in separate
@@ -315,9 +315,10 @@ Five rules here are load-bearing, and each was arrived at the hard way:
 3. **A finished action is finished.** `CanStart` gates every fresh start, and
    "fresh" means the status was not `Running` — not merely that the action id
    changed. Comparing only the id left `Done` actions repeating forever.
-4. **Forced actions do not fall through.** The lab pins an action (`O`) so it can be
+4. **Forced actions do not fall through.** The Sandbox pins an action (`O`) so it can be
    watched in isolation; watching a pinned action *fail* is the diagnostic. Nothing
-   outside the lab ever sets `Doing.Forced`.
+   outside the Sandbox ever sets `Doing.Forced`, and the same goes for
+   `Doing.Waypoint` — the "go here" a click drops, which only `MoveAction` reads.
 5. **Actions execute, they never choose.** Closing distance to a green the creature
    already decided to eat is execution. Deciding to eat rather than flee is the
    brain's, and must never migrate into an action — food-finding has to stay
@@ -337,12 +338,12 @@ an empty slot in the runner's table looks exactly like an unfinished one.
 ### Two environments, two implementations
 
 `IEnvironment` has two implementations, and **they do not share their feeding or
-ray-casting code**. `LabEnvironment` brute-forces a plant list; `BoardEnvironment`
+ray-casting code**. `SandboxEnvironment` brute-forces a plant list; `BoardEnvironment`
 marches a grid (DDA) and has its own `ResolveBite`, `FindBiteTarget` and
 `StillBiting`.
 
 So **anything touching sensing or eating must be measured on both.** A change can
-be perfect in the lab and broken on the board. The signature of that failure in the
+be perfect in the Sandbox and broken on the board. The signature of that failure in the
 soak report is `Bite` high with `in/s` near zero.
 
 ### What is *not* an entity

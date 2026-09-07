@@ -311,7 +311,7 @@ public sealed class BoardScreen : GolScreen
 
             // Screen space: the label must not scale with zoom, or it is unreadable
             // at both ends of the range. The camera does the projection here; the
-            // lab, which has no camera, projects by hand.
+            // sandbox, which has no camera, projects by hand.
             var head = _camera.WorldToScreen(ToXna(creature.Position));
             head.Y -= creature.Radius * _camera.Zoom + 6f;
 

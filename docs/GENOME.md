@@ -270,7 +270,7 @@ Effector gates are **Schmitt triggers**, not bare thresholds: a gate opens above
 and stays open until the output falls below 0.2. Without the gap, a brain output
 resting near the threshold flips it every tick and the creature flutters its mouth
 sixty times a second instead of taking a bite — measured at **8.76 changes of action
-per creature-second** in the lab before this, 3.9 after.
+per creature-second** in the Sandbox before this, 3.9 after.
 
 `Reproduce` is hysteretic too, which was worth checking rather than assuming: it
 feeds `CanReproduce`, so a latched gate could in principle mean breeding every
@@ -294,10 +294,10 @@ and an unevolved genome will still sit and chew on nothing.
 ### Density is the lever, not per-plant value
 
 What a creature experiences is how *often* it finds food, not how fat each morsel
-is. The Creature Lab had 14 plants in a 340-unit arena and a creature there
+is. The Sandbox had 14 plants in a 340-unit arena and a creature there
 essentially never ate — measured intake **0.00/s across every seed tried**, starving
 in about two minutes. The board works because it is roughly **seventy times denser**
-in plants per unit area: a creature there cannot avoid food. The lab now seeds 240,
+in plants per unit area: a creature there cannot avoid food. The soak runner seeds 240,
 putting mean nearest-plant distance inside the eye.
 
 Reach for density before reaching for `MaxEnergy`.
