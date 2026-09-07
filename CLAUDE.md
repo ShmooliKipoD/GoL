@@ -13,10 +13,32 @@ open-ended rather than fixed at design time.
 
 MonoGame DesktopGL 3.8.1.303 + MonoGame.Extended 4.0.0, `net8.0`, macOS desktop.
 
-`docs/SPEC.md` is the owner's original brief and the source of truth for scope.
-`docs/DESIGN.md` is the cumulative build log — one section per step with
-problem, approach and files touched. **Append to it and commit at the end of
-every step**; that cadence is an explicit requirement, not a convention.
+### The docs, and which one to reach for
+
+| File | What it is |
+|---|---|
+| `docs/SPEC.md` | The owner's original brief. **The source of truth for scope** |
+| `docs/DESIGN.md` | Cumulative build log — one section per step: problem, approach, measurements, files touched |
+| `docs/ARCHITECTURE.md` | Project layout, the **tick order** and why it is load-bearing |
+| `docs/GENOME.md` | Trait axes, latent attributes, mutation classes |
+| `docs/CONTROLS.md` | Every key in the board view and the Creature Lab |
+
+## Workflow
+
+**Documentation is updated by commit, not at the end of a step.** Every commit
+that changes behaviour carries its doc change with it — `DESIGN.md` for what was
+learned, plus `ARCHITECTURE.md` / `CONTROLS.md` / `GENOME.md` when the thing they
+describe moved. A commit whose docs land later is a commit whose docs describe a
+state that never existed.
+
+Two habits this repository has paid for, both worth keeping:
+
+- **Measure before you change, on the same branch.** Numbers carried forward from
+  an earlier step are usually measuring different code. Re-run the baseline first
+  and put both numbers in the commit message.
+- **Instrument rather than reason** when behaviour is wrong. Four separate freezes
+  in Step 3g were each mis-diagnosed by inspection and all four found in one run of
+  a throwaway probe that printed per-creature state.
 
 ## Build & Run (macOS)
 
@@ -33,6 +55,51 @@ DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib:/usr/local/lib dotnet build
 DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib:/usr/local/lib dotnet run --project src/GoL.App
 dotnet test                              # needs no env var - see below
 ```
+
+### Tests
+
+`dotnet test` needs no `DYLD` variable: the sim tests link no graphics, and the UI
+tests exercise pure input logic. A full run is about 10 seconds.
+
+```bash
+dotnet test --filter ActionExecutionTests             # one class
+dotnet test --filter FullyEatenPlant_IsRemoved        # one test
+dotnet test --filter "FullyQualifiedName~Feeding"     # substring match
+dotnet test tests/GoL.Sim.Tests                       # one project
+```
+
+A filtered run prints `No test matches the given testcase filter ... in
+GoL.Ui.Tests.dll` for whichever project does not contain the test. That is not a
+failure — scope the run to one project to silence it.
+
+### The soak runner
+
+`tools/GoL.Headless` is how behaviour is actually measured, and the standing proof
+that the core needs no graphics — it references `GoL.Sim` only and runs **without**
+`DYLD_FALLBACK_LIBRARY_PATH`. Use `-c Release`; a Debug soak is several times
+slower.
+
+```bash
+# the board
+dotnet run --project tools/GoL.Headless -c Release -- --ticks 20000 --seed 42
+
+# the Creature Lab arena, which is small and dense
+dotnet run --project tools/GoL.Headless -c Release -- \
+    --lab --plants 240 --creatures 8 --ticks 20000 --seed 7
+```
+
+| Flag | Meaning |
+|---|---|
+| `--ticks`, `--seed`, `--creatures` | Run length, RNG seed, starting population |
+| `--lab`, `--plants` | Use `LabEnvironment` instead of the board, with N plants |
+| `--unlock-all` | Grant every latent attribute at spawn. **Not a simulation mode** — it makes the latent rows of the behaviour histogram falsifiable, since a short run unlocks nothing and a permanently-zero row is indistinguishable from a broken one |
+
+It prints a per-action histogram with **`running` and `blocked` in separate
+columns** — a row that is mostly blocked is a creature repeatedly attempting
+something it cannot do — plus bites per creature-minute, mouth-open share, action
+switches per creature-second, and a `world hash`. Two runs that should be identical
+must produce the same hash; it is quantised, so display-only changes do not move
+it.
 
 In VS Code the `build`/`run` tasks and the **Debug GoL** launch config already
 inject it; press F5.
@@ -142,11 +209,13 @@ that entry has never actually worked. Fixing it needs `sudo`.
 
 ## Architecture
 
-Five projects. The dependency direction is the whole design:
+Six projects. The dependency direction is the whole design:
 
 ```
 GoL.Sim  <--  GoL.Render  <--  GoL.App
-   ^                              (MonoGame + Extended)
+   ^              ^               (MonoGame + Extended)
+   |              |
+   |              +--  GoL.Ui.Tests       (menu list, confirm prompt)
    |
    +--  GoL.Sim.Tests,  GoL.Headless      (no graphics stack at all)
 ```
@@ -156,7 +225,10 @@ GoL.Sim  <--  GoL.Render  <--  GoL.App
 - **`src/GoL.Render`** — draws sim state. Pure presentation; holds no
   simulation logic and never mutates what it is handed.
 - **`src/GoL.App`** — `Game` subclass, `ScreenManager`, screens, config.
-- **`tests/GoL.Sim.Tests`** — xunit against the core.
+- **`tests/GoL.Sim.Tests`** — xunit against the core; the bulk of the suite.
+- **`tests/GoL.Ui.Tests`** — xunit against the input-handling widgets in
+  `GoL.Render` that are pure logic (menu selection, modal prompts). It references
+  `GoL.Render`, so unlike the sim tests it is not proof of anything headless.
 - **`tools/GoL.Headless`** — soak runner; references `GoL.Sim` only, so it
   needs no GL context and no `DYLD_FALLBACK_LIBRARY_PATH`.
 
@@ -206,6 +278,72 @@ is non-obvious and each will otherwise be re-litigated:
    allocation-free, but **birth allocates** one object per component. Step 4 has
    hundreds of births in a run; pool component objects on the entity free list if
    that shows up in a profile.
+
+### Actions: what a creature *does*
+
+A creature runs **exactly one action at a time**, and while it runs it owns the
+body. This layer is `src/GoL.Sim/Acting/`:
+
+```csharp
+enum ActionStatus { Running, Done, Blocked }
+
+interface ICreatureAction
+{
+    CreatureAction Id { get; }
+    bool CanStart(in ActionContext ctx);        // is there anything to eat?
+    ActionStatus Execute(in ActionContext ctx, float dt);
+}
+```
+
+`ActionRunnerSystem` selects one and runs it; the `Doing` component records what
+ran, its status and its target. **`ActuateSystem` and `FeedSystem` no longer
+exist** — they applied thrust, turn, scent and biting as four unrelated effects of
+one `Intent`, so nothing owned "eating" and nothing could notice a creature biting
+at empty air.
+
+Five rules here are load-bearing, and each was arrived at the hard way:
+
+1. **Selection reads `Intent`, never the body.** The readout deliberately reads
+   Move and Turn off the body (what it is visibly doing, not what it asked for).
+   Selecting on those same values self-latches: the body moves because Move ran
+   last tick, so Move reads high, so Move wins again regardless of the brain — and
+   the symptom is actions running to completion, which is the desired outcome, so
+   the bug reads as success.
+2. **An action returning `Blocked` must not have moved the body.** The runner falls
+   through to the next-best action on a block, and that one will drive; two actions
+   moving one creature in a tick charges it twice.
+3. **A finished action is finished.** `CanStart` gates every fresh start, and
+   "fresh" means the status was not `Running` — not merely that the action id
+   changed. Comparing only the id left `Done` actions repeating forever.
+4. **Forced actions do not fall through.** The lab pins an action (`O`) so it can be
+   watched in isolation; watching a pinned action *fail* is the diagnostic. Nothing
+   outside the lab ever sets `Doing.Forced`.
+5. **Actions execute, they never choose.** Closing distance to a green the creature
+   already decided to eat is execution. Deciding to eat rather than flee is the
+   brain's, and must never migrate into an action — food-finding has to stay
+   something a lineage evolves.
+
+`Eat` steers by **sight** (its own eye bins), never by asking the environment where
+food is. An environment query would give a creature with terrible eyes the same
+food-finding as one with excellent eyes. Because an eye reports a *direction and a
+range* and never an identity, approach and biting are separate: `Doing.Target`
+holds where to go, `Mind.BiteTarget` keeps the mouth-reach latch by id.
+
+Opposite behaviours are **one signed action**, not two: chase/flee are `Move` with
+a sign, left/right are `Turn`. Sprint is a *modifier* on movement and gets no
+`ICreatureAction` at all — `Acting/SprintAction.cs` exists only to say so, because
+an empty slot in the runner's table looks exactly like an unfinished one.
+
+### Two environments, two implementations
+
+`IEnvironment` has two implementations, and **they do not share their feeding or
+ray-casting code**. `LabEnvironment` brute-forces a plant list; `BoardEnvironment`
+marches a grid (DDA) and has its own `ResolveBite`, `FindBiteTarget` and
+`StillBiting`.
+
+So **anything touching sensing or eating must be measured on both.** A change can
+be perfect in the lab and broken on the board. The signature of that failure in the
+soak report is `Bite` high with `in/s` near zero.
 
 ### What is *not* an entity
 
